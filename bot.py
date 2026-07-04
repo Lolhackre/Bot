@@ -1,9 +1,11 @@
 import os
 import sqlite3
 from datetime import time as dtime
+from html import escape
 
 import pytz
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     MessageHandler,
@@ -34,8 +36,9 @@ POLL_OPTIONS = [
     "Не гуляю",
 ]
 
-WALK_SCORE = 5      # очков кармы за участие в прогулке
-MESSAGE_SCORE = 1   # очков за одно сообщение в группе
+WALK_SCORE = 5        # очков кармы за участие в прогулке
+NOT_WALKING_PENALTY = 2  # очков штрафа за выбор "Не гуляю"
+MESSAGE_SCORE = 1     # очков за одно сообщение в группе
 
 
 # ---------- База данных ----------
@@ -47,7 +50,8 @@ def db_init():
             username TEXT,
             full_name TEXT,
             messages_count INTEGER DEFAULT 0,
-            walks_count INTEGER DEFAULT 0
+            walks_count INTEGER DEFAULT 0,
+            walk_karma INTEGER DEFAULT 0
         )
     """)
     conn.execute("""
@@ -56,6 +60,11 @@ def db_init():
             not_walking_index INTEGER
         )
     """)
+    # На случай, если база уже существовала без колонки walk_karma
+    cur = conn.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in cur.fetchall()]
+    if "walk_karma" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN walk_karma INTEGER DEFAULT 0")
     conn.commit()
     conn.close()
 
@@ -80,7 +89,23 @@ def db_add_message(user_id):
 
 def db_add_walk(user_id):
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("UPDATE users SET walks_count = walks_count + 1 WHERE user_id=?", (user_id,))
+    conn.execute("""
+        UPDATE users
+        SET walks_count = walks_count + 1,
+            walk_karma = walk_karma + ?
+        WHERE user_id=?
+    """, (WALK_SCORE, user_id))
+    conn.commit()
+    conn.close()
+
+
+def db_penalize_not_walking(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        UPDATE users
+        SET walk_karma = walk_karma - ?
+        WHERE user_id=?
+    """, (NOT_WALKING_PENALTY, user_id))
     conn.commit()
     conn.close()
 
@@ -88,7 +113,7 @@ def db_add_walk(user_id):
 def db_top_by_messages(limit=10):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.execute(f"""
-        SELECT username, full_name, messages_count,
+        SELECT user_id, username, full_name, messages_count,
                (messages_count * {MESSAGE_SCORE}) AS score
         FROM users
         WHERE messages_count > 0
@@ -102,17 +127,30 @@ def db_top_by_messages(limit=10):
 
 def db_top_by_walks(limit=10):
     conn = sqlite3.connect(DB_PATH)
-    cur = conn.execute(f"""
-        SELECT username, full_name, walks_count,
-               (walks_count * {WALK_SCORE}) AS score
+    cur = conn.execute("""
+        SELECT user_id, username, full_name, walks_count, walk_karma
         FROM users
-        WHERE walks_count > 0
-        ORDER BY score DESC
+        WHERE walk_karma != 0 OR walks_count > 0
+        ORDER BY walk_karma DESC
         LIMIT ?
     """, (limit,))
     rows = cur.fetchall()
     conn.close()
     return rows
+
+
+def db_get_user_stats(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute(f"""
+        SELECT user_id, username, full_name, messages_count,
+               (messages_count * {MESSAGE_SCORE}) AS message_score,
+               walks_count, walk_karma
+        FROM users
+        WHERE user_id = ?
+    """, (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row
 
 
 def db_all_usernames():
@@ -171,11 +209,38 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if user.is_bot:
         return
 
+    text = update.message.text or ""
+    if text.startswith("!"):
+        return  # текстовые команды вида !карма не считаются обычным сообщением
+
     db_upsert_user(user.id, user.username, user.full_name)
     db_add_message(user.id)
 
 
+# ---------- Текстовые команды в стиле "!карма" ----------
+async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.chat_id != MAIN_GROUP_CHAT_ID:
+        return
+
+    text = (update.message.text or "").strip().lower()
+    if text in ("!карма", "!топ"):
+        await show_karma(update, context)
+    elif text in ("!моя карма", "!моякарма"):
+        await show_my_karma(update, context)
+
+
 # ---------- Команда /карма ----------
+def format_user_link(user_id, username, full_name):
+    """
+    Ссылка на профиль пользователя, кликабельная (можно открыть профиль),
+    но БЕЗ символа @ в тексте — поэтому Telegram не считает это упоминанием
+    и не шлёт человеку уведомление о пинге.
+    """
+    display_name = escape(full_name or username or str(user_id))
+    url = f"tg://user?id={user_id}"
+    return f'<a href="{url}">{display_name}</a>'
+
+
 async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messages_rows = db_top_by_messages(10)
     walks_rows = db_top_by_walks(10)
@@ -186,8 +251,8 @@ async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lines = ["💬 Карма за общение:\n"]
     if messages_rows:
-        for i, (username, full_name, messages, score) in enumerate(messages_rows, start=1):
-            name = f"@{username}" if username else full_name
+        for i, (user_id, username, full_name, messages, score) in enumerate(messages_rows, start=1):
+            name = format_user_link(user_id, username, full_name)
             lines.append(f"{i}. {name} — {score} очков ({messages} сообщ.)")
     else:
         lines.append("Пока нет данных.")
@@ -195,13 +260,41 @@ async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines.append("")  # пустая строка-разделитель
     lines.append("🚶 Карма за прогулки:\n")
     if walks_rows:
-        for i, (username, full_name, walks, score) in enumerate(walks_rows, start=1):
-            name = f"@{username}" if username else full_name
-            lines.append(f"{i}. {name} — {score} очков ({walks} прогулок)")
+        for i, (user_id, username, full_name, walks, score) in enumerate(walks_rows, start=1):
+            name = format_user_link(user_id, username, full_name)
+            lines.append(f"{i}. {name} — {score} очков кармы | Прогулок: {walks}")
     else:
         lines.append("Пока нет данных.")
 
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text(
+        "\n".join(lines),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+
+
+async def show_my_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    stats = db_get_user_stats(user.id)
+
+    if stats is None or (stats[3] == 0 and stats[5] == 0):
+        await update.message.reply_text("У вас пока нет статистики — напишите пару сообщений в чате или проголосуйте в опросе о прогулке.")
+        return
+
+    _, username, full_name, messages, message_score, walks, walk_karma = stats
+    name = format_user_link(user.id, username, full_name)
+
+    text = (
+        f"📊 Статистика для {name}:\n\n"
+        f"💬 Карма за общение: {message_score} очков ({messages} сообщ.)\n"
+        f"🚶 Карма за прогулки: {walk_karma} очков (Прогулок: {walks})"
+    )
+
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
 
 
 # ---------- Ежедневный опрос ----------
@@ -250,7 +343,16 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     db_upsert_user(user.id, user.username, user.full_name)
 
     chosen = answer.option_ids
-    if chosen and not_walking_index not in chosen:
+    if not chosen:
+        return  # человек снял голос — ничего не делаем
+
+    if not_walking_index in chosen:
+        # Выбрано "Не гуляю" (даже вместе с другими местами) — штраф,
+        # карма за прогулку не начисляется, счётчик прогулок не растёт
+        db_penalize_not_walking(user.id)
+    else:
+        # Выбрано одно или несколько мест без "Не гуляю" —
+        # засчитывается как ОДНА прогулка (не умножается на число мест)
         db_add_walk(user.id)
 
 
@@ -260,10 +362,15 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler(["karma", "top"], show_karma))
+    app.add_handler(CommandHandler("mykarma", show_my_karma))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
         handle_private_message
+    ))
+    app.add_handler(MessageHandler(
+        filters.Regex(r"(?i)^!(карма|топ|моя\s*карма)$") & filters.ChatType.GROUPS,
+        handle_text_command
     ))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS,
@@ -281,4 +388,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+        
