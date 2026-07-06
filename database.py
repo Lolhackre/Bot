@@ -19,7 +19,7 @@ def db_init():
                 messages_count INTEGER DEFAULT 0,
                 walks_count INTEGER DEFAULT 0,
                 walk_karma INTEGER DEFAULT 0,
-                permission_rank INTEGER DEFAULT 1,
+                permission_rank INTEGER DEFAULT 0,
                 days_inactive INTEGER DEFAULT 0,
                 last_activity TEXT,
                 daily_messages_count INTEGER DEFAULT 0
