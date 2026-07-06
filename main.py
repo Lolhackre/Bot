@@ -1139,9 +1139,10 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
 
-  async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Простая проверка"""
     text = ' '.join(context.args) or "тест"
-    await update.message.reply_text(f"✅ Команда работает!\nТекст: {text}")
+    await update.message.reply_text(f"✅ Команда !voic работает!\nТекст: {text}")
 
     jq = app.job_queue
     
