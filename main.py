@@ -150,28 +150,44 @@ def format_rank(rank, is_creator=False):
     name = db_get_rank_name(rank)
     return f"{name} ({rank})"
 
-def resolve_target_user(update, arg_text):
+async def resolve_target_user(update, context, arg_text):
     """Универсальное определение цели команды:
     сначала пробуем @username/ID из arg_text, затем — ответ на сообщение (reply).
+    Для @username сначала спрашиваем у самого Telegram (get_chat) — это всегда
+    актуальные данные, в отличие от локального кеша в базе, который может устареть
+    (человек мог сменить username, или бот его ещё не сохранял).
     Возвращает (user_id, username, full_name) или None, если цель не определена."""
     if arg_text:
         arg_text = arg_text.strip()
-        target_id = None
+
         if arg_text.startswith("@"):
+            # 1. Пробуем спросить у Telegram напрямую — свежие данные
+            try:
+                chat = await context.bot.get_chat(arg_text)
+                return (chat.id, chat.username, chat.full_name)
+            except Exception:
+                pass
+            # 2. Фоллбек на локальную базу, если Telegram не смог отдать данные
             target_id = db_get_user_id_by_username(arg_text)
+            if target_id is not None:
+                with sqlite3.connect(config.DB_PATH) as conn:
+                    cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
+                    row = cur.fetchone()
+                if row:
+                    return (target_id, row[0], row[1])
+                return (target_id, None, None)
         else:
             try:
                 target_id = int(arg_text)
             except ValueError:
                 target_id = None
-
-        if target_id is not None:
-            with sqlite3.connect(config.DB_PATH) as conn:
-                cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
-                row = cur.fetchone()
-            if row:
-                return (target_id, row[0], row[1])
-            return (target_id, None, None)
+            if target_id is not None:
+                with sqlite3.connect(config.DB_PATH) as conn:
+                    cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
+                    row = cur.fetchone()
+                if row:
+                    return (target_id, row[0], row[1])
+                return (target_id, None, None)
 
     if update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
@@ -242,7 +258,7 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if bare_first == "инфа":
         is_command = True
         db_log_message(user.id, user.username, user.full_name, is_command=is_command)
-        resolved = resolve_target_user(update, bare_rest)
+        resolved = await resolve_target_user(update, context, bare_rest)
         if resolved is None:
             target_id, target_username, target_full_name = user.id, user.username, user.full_name
         else:
@@ -263,7 +279,7 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+.")
             return
 
-        resolved = resolve_target_user(update, bare_rest)
+        resolved = await resolve_target_user(update, context, bare_rest)
         if resolved is None:
             await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username.")
             return
@@ -337,7 +353,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 0d. Команда !инфа [@юзер / ID] — профиль (свой, ответом на сообщение, или чужой по @юзер/ID)
     if text == "!инфа" or text.startswith("!инфа "):
         arg = raw_text[5:].strip()
-        resolved = resolve_target_user(update, arg if arg else None)
+        resolved = await resolve_target_user(update, context, arg if arg else None)
         if resolved is None:
             target_id = user_id
             target_username = update.effective_user.username
@@ -512,8 +528,13 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                     pass
                 
                 if target_param.startswith("@"):
-                    target_id = db_get_user_id_by_username(target_param.lower())
-                    display_name = escape(target_param)
+                    try:
+                        chat = await context.bot.get_chat(target_param)
+                        target_id = chat.id
+                        display_name = format_user_link(chat.id, chat.username, chat.full_name)
+                    except Exception:
+                        target_id = db_get_user_id_by_username(target_param.lower())
+                        display_name = escape(target_param)
                 else:
                     try:
                         target_id = int(target_param)
@@ -559,8 +580,13 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             if len(parts) >= 2:
                 target_param = parts[1]
                 if target_param.startswith("@"):
-                    target_id = db_get_user_id_by_username(target_param.lower())
-                    display_name = escape(target_param)
+                    try:
+                        chat = await context.bot.get_chat(target_param)
+                        target_id = chat.id
+                        display_name = format_user_link(chat.id, chat.username, chat.full_name)
+                    except Exception:
+                        target_id = db_get_user_id_by_username(target_param.lower())
+                        display_name = escape(target_param)
                 else:
                     try:
                         target_id = int(target_param)
@@ -692,7 +718,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not is_creator and current_rank < min_rank:
             await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
-        resolved = resolve_target_user(update, action_target_arg)
+        resolved = await resolve_target_user(update, context, action_target_arg)
         if resolved is None:
             await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username/ID.")
             return
