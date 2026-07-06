@@ -6,10 +6,11 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from html import escape
-from database import db_get_user_rank, db_get_command_rank
+from database import db_get_user_rank, db_get_command_rank, db_get_nickname
 
 def _format_user_link(user_id, username, full_name):
-    display_name = escape(full_name or username or str(user_id))
+    nickname = db_get_nickname(user_id)
+    display_name = escape(nickname or full_name or username or str(user_id))
     return f'<a href="tg://user?id={user_id}">{display_name}</a>'
 
 # Действия, которые можно применить к участнику ответом на его сообщение.
@@ -102,19 +103,15 @@ ACTIONS = {
     "в_попку": ("🍑", "вошёл(ла) в попку"),
     "шлеп_жопа": ("🍑", "шлёпнул(а) по голой жопе"),
     "отъебать": ("🔥", "отъебал(а) как следует"),
-        "шлепнуть_жопу": ("🍑", "шлёпнул(а) по голой жопе"),
+    "шлепнуть_жопу": ("🍑", "шлёпнул(а) по голой жопе"),
     "лизнуть_шею": ("👅", "облизал(а) шею"),
     "прижать_стену": ("🫦", "прижал(а) к стене"),
-    "за_волосы": ("🖐️", "взял(а) за волосы"),
-    "на_колени": ("🙇", "поставил(а) на колени"),
     "глубоко_рот": ("🍆", "загнал(а) глубоко в рот"),
     "анал_жёстко": ("🍑", "выебал(а) в попку жёстко"),
     "куни_глубоко": ("🌸", "вылизал(а) глубоко"),
     "дрочить_быстро": ("✊", "подрочил(а) быстро"),
     "кончить_лицо": ("💦", "кончил(а) на лицо"),
     "отсосать_глубоко": ("😮", "отсосал(а) глубоко"),
-    "сесть_лицо": ("🪑", "сел(а) на лицо"),
-    "фистинг": ("✊", "зафистил(а)"),
     "связать_руки": ("⛓️", "связал(а) руки"),
     "шлеп_грудь": ("🍒", "шлёпнул(а) по груди"),
     "укусить_сосок": ("🦷", "укусил(а) сосок"),
