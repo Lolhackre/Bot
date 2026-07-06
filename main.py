@@ -1102,9 +1102,9 @@ def main():
     app.add_handler(CommandHandler("mykarma", show_my_karma))
     app.add_handler(CommandHandler("test_poll", test_poll_command))
 
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_private_message))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^[!+]") & filters.ChatType.GROUPS, handle_text_command))
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, handle_group_message), group=1) 
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.UpdateType.EDITED, handle_private_message))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^[!+]") & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_text_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_group_message), group=1) 
     
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
