@@ -150,6 +150,37 @@ def format_rank(rank, is_creator=False):
     name = db_get_rank_name(rank)
     return f"{name} ({rank})"
 
+def resolve_target_user(update, arg_text):
+    """Универсальное определение цели команды:
+    сначала пробуем @username/ID из arg_text, затем — ответ на сообщение (reply).
+    Возвращает (user_id, username, full_name) или None, если цель не определена."""
+    if arg_text:
+        arg_text = arg_text.strip()
+        target_id = None
+        if arg_text.startswith("@"):
+            target_id = db_get_user_id_by_username(arg_text)
+        else:
+            try:
+                target_id = int(arg_text)
+            except ValueError:
+                target_id = None
+
+        if target_id is not None:
+            with sqlite3.connect(config.DB_PATH) as conn:
+                cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
+                row = cur.fetchone()
+            if row:
+                return (target_id, row[0], row[1])
+            return (target_id, None, None)
+
+    if update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        if target_user.is_bot:
+            return None
+        return (target_user.id, target_user.username, target_user.full_name)
+
+    return None
+
 # ---------- Базовые команды ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Здравствуйте! Напишите вашу жалобу одним сообщением — она будет передана.")
@@ -203,8 +234,25 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     stripped_lower = text.strip().lower()
     is_command = text.startswith("!") or text.startswith("/") or text.startswith("+")
 
-    # Действие словом-триггером БЕЗ "!" — срабатывает только ответом на чье-то сообщение
-    if update.message.reply_to_message and stripped_lower in funmodule.ACTIONS:
+    # Команда "инфа" без "!" — своя инфа, инфа в ответ на сообщение, или "инфа @юзер"
+    bare_words = stripped_lower.split(maxsplit=1)
+    bare_first = bare_words[0] if bare_words else ""
+    bare_rest = bare_words[1] if len(bare_words) > 1 else None
+
+    if bare_first == "инфа":
+        is_command = True
+        db_log_message(user.id, user.username, user.full_name, is_command=is_command)
+        resolved = resolve_target_user(update, bare_rest)
+        if resolved is None:
+            target_id, target_username, target_full_name = user.id, user.username, user.full_name
+        else:
+            target_id, target_username, target_full_name = resolved
+        await show_profile(update, context, target_id, target_username, target_full_name)
+        return
+
+    # Действие словом-триггером БЕЗ "!" — ответом на сообщение ИЛИ словом + @юзер (например "ударить @юзер")
+    looks_like_target = bool(bare_rest) and (bare_rest.startswith("@") or bare_rest.isdigit())
+    if bare_first in funmodule.ACTIONS and (update.message.reply_to_message or looks_like_target):
         is_command = True
         db_log_message(user.id, user.username, user.full_name, is_command=is_command)
 
@@ -215,7 +263,11 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+.")
             return
 
-        await funmodule.command_action(update, context, stripped_lower)
+        resolved = resolve_target_user(update, bare_rest)
+        if resolved is None:
+            await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username.")
+            return
+        await funmodule.command_action(update, context, bare_first, resolved)
         return
 
     db_log_message(user.id, user.username, user.full_name, is_command=is_command)
@@ -282,6 +334,19 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"🎂 Дата рождения сохранена: {parsed}. Не забуду поздравить!")
         return
 
+    # 0d. Команда !инфа [@юзер / ID] — профиль (свой, ответом на сообщение, или чужой по @юзер/ID)
+    if text == "!инфа" or text.startswith("!инфа "):
+        arg = raw_text[5:].strip()
+        resolved = resolve_target_user(update, arg if arg else None)
+        if resolved is None:
+            target_id = user_id
+            target_username = update.effective_user.username
+            target_full_name = update.effective_user.full_name
+        else:
+            target_id, target_username, target_full_name = resolved
+        await show_profile(update, context, target_id, target_username, target_full_name)
+        return
+
     # 1. Справка по командам (!хелп / !помощь)
     if text in ("!хелп", "!помощь"):
         cmd_ranks = db_get_command_ranks()
@@ -289,6 +354,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "📖 <b>Справка по командам бота:</b>\n\n"
             "💬 <code>!карма</code> или <code>!топ</code> — Показать топ участников по общению и прогулкам.\n"
             "👤 <code>!моя карма</code> или <code>!моякарма</code> — Показать личную статистику и ваш ранг.\n"
+            "ℹ️ <code>!инфа</code> / <code>инфа</code> / <code>!инфа @юзер</code> — Показать инфу о себе или другом участнике (можно и ответом на сообщение).\n"
             "❓ <code>!хелп</code> или <code>!помощь</code> — Вызов этого меню.\n\n"
             "🖊 <b>Профиль:</b>\n"
             "🏷 <code>+ник [текст]</code> — Задать кастомный ник для статистики и действий (пусто — сбросить).\n"
@@ -612,19 +678,25 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             lines.append(f"{emoji} <code>!{key}</code>")
         
         min_rank = db_get_command_rank("действие")
-        lines.append(f"\nℹ️ Используй ответом на сообщение или !действие @username\nТребуется ранг {format_rank(min_rank)}+.")
+        lines.append(f"\nℹ️ Используй ответом на сообщение, или !действие @username, или прямо !ударить @username\nТребуется ранг {format_rank(min_rank)}+.")
         
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
         return
 
-    # 10. Сами действия (!обнять, !ударить и т.д.) — ответ на сообщение другого участника
-    action_key = text[1:] if text.startswith("!") else text
+    # 10. Сами действия (!обнять, !ударить и т.д.) — ответом на сообщение ИЛИ с указанием @юзер/ID
+    action_parts = text[1:].split(maxsplit=1) if text.startswith("!") else [text]
+    action_key = action_parts[0] if action_parts else ""
+    action_target_arg = action_parts[1].strip() if len(action_parts) > 1 else None
     if action_key in funmodule.ACTIONS:
         min_rank = db_get_command_rank("действие")
         if not is_creator and current_rank < min_rank:
             await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
-        await funmodule.command_action(update, context, action_key)
+        resolved = resolve_target_user(update, action_target_arg)
+        if resolved is None:
+            await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username/ID.")
+            return
+        await funmodule.command_action(update, context, action_key, resolved)
         return
 
     # 11. Команда !исправить ранги — Ранг 6 (жестко). Одноразовая массовая починка бага дефолтного ранга.
@@ -693,6 +765,32 @@ async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"{i}. {format_user_link(uid, un, fn)} — {score} очков | Прогулок: {walks}")
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, target_id, target_username, target_full_name):
+    """Показывает 'инфу' (профиль) любого участника — себя или другого."""
+    stats = db_get_user_stats(target_id)
+    if not stats:
+        await update.message.reply_text("ℹ️ У этого пользователя пока нет статистики.")
+        return
+    _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
+    is_creator = (target_id == 8049751536)
+    nickname, status_text, birthday = db_get_profile_extra(target_id)
+    display_name = format_user_link(target_id, un or target_username, fn or target_full_name)
+
+    text = (
+        f"ℹ️ <b>Инфа:</b> {display_name}\n"
+        f"Ранг доступа: {format_rank(rank, is_creator)}\n"
+        f"Дней молчания: {inactive}\n"
+    )
+    if status_text:
+        text += f"💭 Статус: <i>{escape(status_text)}</i>\n"
+    if birthday:
+        text += f"🎂 День рождения: {birthday}\n"
+    text += (
+        f"\n💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
+        f"🚶 Карма за прогулки: {w_karma} очков (Прогулок: {walks})"
+    )
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 async def show_my_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
