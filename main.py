@@ -116,10 +116,10 @@ def db_reset_user_stats(user_id):
 # ---------- Вспомогательные функции ----------
 def format_user_link(user_id, username, full_name):
     display_name = escape(full_name or username or str(user_id))
-    return f'<a href="tg://user?id={user_id}">{display_name}</a>'
+    return f'<a href="https://t.me/{username}">{display_name}</a>'
 
 def format_silent_ping(user_id):
-    return f'<a href="tg://user?id={user_id}">&#8288;</a>'
+    return f'<a href="https://t.me/{username}">&#8288;</a>'
 
 def format_rank(rank, is_creator=False):
     """Возвращает читаемое название ранга, например 'Заместитель (5)'"""
