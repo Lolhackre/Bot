@@ -19,6 +19,10 @@ from telegram.ext import (
 )
 
 import config
+import tempfile
+import os
+from fishaudio import FishAudio
+from fishaudio.utils import save
 from database import (
     db_init, db_log_message, db_get_user_rank, 
     db_save_poll, db_get_poll, 
