@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from config import DB_PATH, MESSAGE_SCORE, WALK_SCORE, NOT_WALKING_PENALTY
+from config import DB_PATH, MESSAGE_SCORE, WALK_SCORE, NOT_WALKING_PENALTY, DEFAULT_RANK_NAMES
 
 def db_connect():
     conn = sqlite3.connect(DB_PATH)
@@ -43,6 +43,21 @@ def db_init():
                 not_walking_index INTEGER
             )
         """)
+
+        # Таблица названий рангов (можно менять на лету командой !команда)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rank_names (
+                rank INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+        """)
+
+        # Засеиваем дефолтные названия рангов, если их еще нет
+        for rank, name in DEFAULT_RANK_NAMES.items():
+            conn.execute("""
+                INSERT OR IGNORE INTO rank_names (rank, name) VALUES (?, ?)
+            """, (rank, name))
+
         conn.commit()
 
 def db_log_message(user_id, username, full_name, is_command=False):
@@ -73,6 +88,32 @@ def db_get_user_rank(user_id):
 def db_set_user_rank(user_id, rank):
     with db_connect() as conn:
         conn.execute("UPDATE users SET permission_rank = ? WHERE user_id = ?", (rank, user_id))
+        conn.commit()
+
+def db_get_rank_names():
+    """Возвращает словарь {ранг: название} для всех рангов 0-6"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT rank, name FROM rank_names")
+        rows = cur.fetchall()
+    names = dict(DEFAULT_RANK_NAMES)  # фолбек на случай отсутствия записи
+    names.update({rank: name for rank, name in rows})
+    return names
+
+def db_get_rank_name(rank):
+    """Возвращает название конкретного ранга (с фолбеком на дефолт/номер)"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT name FROM rank_names WHERE rank = ?", (rank,))
+        row = cur.fetchone()
+    if row:
+        return row[0]
+    return DEFAULT_RANK_NAMES.get(rank, str(rank))
+
+def db_set_rank_name(rank, name):
+    with db_connect() as conn:
+        conn.execute("""
+            INSERT INTO rank_names (rank, name) VALUES (?, ?)
+            ON CONFLICT(rank) DO UPDATE SET name = excluded.name
+        """, (rank, name))
         conn.commit()
 
 def db_add_walk(user_id):
