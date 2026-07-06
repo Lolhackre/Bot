@@ -26,7 +26,9 @@ from database import (
     db_get_all_users, db_increment_inactivity, db_set_user_rank,
     db_get_rank_names, db_get_rank_name, db_set_rank_name,
     db_get_command_rank, db_set_command_rank, db_get_command_ranks,
-    db_fix_default_rank_bug
+    db_fix_default_rank_bug,
+    db_set_nickname, db_get_nickname, db_set_status, db_get_status,
+    db_set_birthday, db_get_birthday, db_get_profile_extra, db_get_todays_birthdays
 )
 
 # Глобальное состояние для отмены опроса на текущий вечер
@@ -117,8 +119,26 @@ def db_reset_user_stats(user_id):
 
 # ---------- Вспомогательные функции ----------
 def format_user_link(user_id, username, full_name):
-    display_name = escape(full_name or username or str(user_id))
+    nickname = db_get_nickname(user_id)
+    display_name = escape(nickname or full_name or username or str(user_id))
     return f'<a href="tg://user?id={user_id}">{display_name}</a>'
+
+def parse_birthday(date_part: str):
+    """Парсит ДД.ММ или ДД.ММ.ГГГГ и возвращает нормализованную строку ДД.ММ, либо None если невалидно"""
+    parts = date_part.strip().split(".")
+    if len(parts) not in (2, 3):
+        return None
+    try:
+        day = int(parts[0])
+        month = int(parts[1])
+    except ValueError:
+        return None
+    # Валидация через datetime (используем невисокосный год 2001, чтобы 29 февраля отсеивалось корректно только в високосных)
+    try:
+        datetime(2000, month, day)  # 2000 — високосный, чтобы разрешить 29.02
+    except ValueError:
+        return None
+    return f"{day:02d}.{month:02d}"
 
 def format_silent_ping(user_id):
     return f'<a href="tg://user?id={user_id}">&#8288;</a>'
@@ -181,7 +201,7 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     text = update.message.text or ""
     stripped_lower = text.strip().lower()
-    is_command = text.startswith("!") or text.startswith("/")
+    is_command = text.startswith("!") or text.startswith("/") or text.startswith("+")
 
     # Действие словом-триггером БЕЗ "!" — срабатывает только ответом на чье-то сообщение
     if update.message.reply_to_message and stripped_lower in funmodule.ACTIONS:
@@ -210,6 +230,58 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     current_rank = db_get_user_rank(user_id)
     is_creator = (user_id == 8049751536)
 
+    # 0a. Команда +ник [новый ник] — кастомный ник в статистике и действиях (пусто = сброс)
+    if text.startswith("+ник"):
+        new_nick = raw_text[4:].strip()
+        if not new_nick:
+            db_set_nickname(user_id, None)
+            await update.message.reply_text("✅ Кастомный ник сброшен, будет отображаться обычное имя.")
+            return
+        if len(new_nick) > 32:
+            await update.message.reply_text("⚠️ Ник слишком длинный (максимум 32 символа).")
+            return
+        db_set_nickname(user_id, new_nick)
+        await update.message.reply_text(
+            f"✅ Теперь в статистике и действиях бота вы будете отображаться как: <b>{escape(new_nick)}</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # 0b. Команда +статус [текст] — личный статус/описание в профиле (пусто = сброс)
+    if text.startswith("+статус"):
+        new_status = raw_text[7:].strip()
+        if not new_status:
+            db_set_status(user_id, None)
+            await update.message.reply_text("✅ Статус очищен.")
+            return
+        if len(new_status) > 100:
+            await update.message.reply_text("⚠️ Статус слишком длинный (максимум 100 символов).")
+            return
+        db_set_status(user_id, new_status)
+        await update.message.reply_text(
+            f"✅ Новый статус установлен: <i>{escape(new_status)}</i>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # 0c. Команда +день рождения [ДД.ММ или ДД.ММ.ГГГГ] — сохраняет дату для авто-поздравления (пусто = сброс)
+    if text.startswith("+день рождения"):
+        date_part = raw_text[len("+день рождения"):].strip()
+        if not date_part:
+            db_set_birthday(user_id, None)
+            await update.message.reply_text("✅ Дата рождения удалена.")
+            return
+        parsed = parse_birthday(date_part)
+        if not parsed:
+            await update.message.reply_text(
+                "⚠️ Неверный формат. Используйте: <code>+день рождения ДД.ММ</code> (например <code>+день рождения 15.03</code>)",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        db_set_birthday(user_id, parsed)
+        await update.message.reply_text(f"🎂 Дата рождения сохранена: {parsed}. Не забуду поздравить!")
+        return
+
     # 1. Справка по командам (!хелп / !помощь)
     if text in ("!хелп", "!помощь"):
         cmd_ranks = db_get_command_ranks()
@@ -217,7 +289,11 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "📖 <b>Справка по командам бота:</b>\n\n"
             "💬 <code>!карма</code> или <code>!топ</code> — Показать топ участников по общению и прогулкам.\n"
             "👤 <code>!моя карма</code> или <code>!моякарма</code> — Показать личную статистику и ваш ранг.\n"
-            "❓ <code>!хелп</code> или <code>!помощь</code> — Вызов этого меню.\n"
+            "❓ <code>!хелп</code> или <code>!помощь</code> — Вызов этого меню.\n\n"
+            "🖊 <b>Профиль:</b>\n"
+            "🏷 <code>+ник [текст]</code> — Задать кастомный ник для статистики и действий (пусто — сбросить).\n"
+            "💭 <code>+статус [текст]</code> — Задать статус/описание профиля (пусто — сбросить).\n"
+            "🎂 <code>+день рождения ДД.ММ</code> — Сохранить дату рождения, бот поздравит в этот день (пусто — удалить).\n"
         )
 
         if is_creator or current_rank >= cmd_ranks.get("действие", 0):
@@ -626,11 +702,18 @@ async def show_my_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
     is_creator = (user.id == 8049751536)
+    nickname, status_text, birthday = db_get_profile_extra(user.id)
     text = (
         f"📊 Статистика для {format_user_link(user.id, un, fn)}:\n"
         f"Ранг доступа: {format_rank(rank, is_creator)}\n"
-        f"Дней молчания: {inactive}\n\n"
-        f"💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
+        f"Дней молчания: {inactive}\n"
+    )
+    if status_text:
+        text += f"💭 Статус: <i>{escape(status_text)}</i>\n"
+    if birthday:
+        text += f"🎂 День рождения: {birthday}\n"
+    text += (
+        f"\n💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
         f"🚶 Карма за прогулки: {w_karma} очков (Прогулок: {walks})"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -855,6 +938,26 @@ async def daily_activity_check(context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.HTML
             )
 
+async def daily_birthday_check(context: ContextTypes.DEFAULT_TYPE):
+    """Поздравляет всех, у кого сегодня день рождения (проверка по формату ДД.ММ)"""
+    today_str = datetime.now(config.KYIV_TZ).strftime("%d.%m")
+    birthday_people = db_get_todays_birthdays(today_str)
+
+    for uid, username, full_name, nickname in birthday_people:
+        display_name = escape(nickname or full_name or username or str(uid))
+        try:
+            msg = await context.bot.send_message(
+                chat_id=config.MAIN_GROUP_CHAT_ID,
+                text=f"🎉🎂 Сегодня день рождения у {format_user_link(uid, username, full_name)}!\nПоздравляем, {display_name}! 🥳🎁",
+                parse_mode=ParseMode.HTML
+            )
+            try:
+                await context.bot.pin_chat_message(chat_id=config.MAIN_GROUP_CHAT_ID, message_id=msg.message_id)
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"Ошибка при поздравлении с ДР ({uid}): {e}", file=sys.stderr)
+
 async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     current_rank = db_get_user_rank(user_id)
@@ -902,7 +1005,7 @@ def main():
     app.add_handler(CommandHandler("test_poll", test_poll_command))
 
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_private_message))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^!") & filters.ChatType.GROUPS, handle_text_command))
+    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^[!+]") & filters.ChatType.GROUPS, handle_text_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, handle_group_message), group=1) 
     
     app.add_handler(CallbackQueryHandler(handle_callback_query))
@@ -929,6 +1032,7 @@ def main():
 
     jq.run_daily(poll_job_wrapper, time=dtime(hour=20, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(daily_activity_check, time=dtime(hour=4, minute=0, tzinfo=config.KYIV_TZ))
+    jq.run_daily(daily_birthday_check, time=dtime(hour=9, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(funmodule.daily_balabol_check, time=dtime(hour=22, minute=00, tzinfo=config.KYIV_TZ))
     print("Бот успешно запущен.")
     app.run_polling()
