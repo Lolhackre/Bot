@@ -24,7 +24,9 @@ from database import (
     db_save_poll, db_get_poll, 
     db_top_by_messages, db_top_by_walks, db_get_user_stats,
     db_get_all_users, db_increment_inactivity, db_set_user_rank,
-    db_get_rank_names, db_get_rank_name, db_set_rank_name
+    db_get_rank_names, db_get_rank_name, db_set_rank_name,
+    db_get_command_rank, db_set_command_rank, db_get_command_ranks,
+    db_fix_default_rank_bug
 )
 
 # Глобальное состояние для отмены опроса на текущий вечер
@@ -116,10 +118,10 @@ def db_reset_user_stats(user_id):
 # ---------- Вспомогательные функции ----------
 def format_user_link(user_id, username, full_name):
     display_name = escape(full_name or username or str(user_id))
-    return f'<a href="https://t.me/{username}">{display_name}</a>'
+    return f'<a href="tg://user?id={user_id}">{display_name}</a>'
 
 def format_silent_ping(user_id):
-    return f'<a href="https://t.me/{username}">&#8288;</a>'
+    return f'<a href="tg://user?id={user_id}">&#8288;</a>'
 
 def format_rank(rank, is_creator=False):
     """Возвращает читаемое название ранга, например 'Заместитель (5)'"""
@@ -178,8 +180,24 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     text = update.message.text or ""
+    stripped_lower = text.strip().lower()
     is_command = text.startswith("!") or text.startswith("/")
-    
+
+    # Действие словом-триггером БЕЗ "!" — срабатывает только ответом на чье-то сообщение
+    if update.message.reply_to_message and stripped_lower in funmodule.ACTIONS:
+        is_command = True
+        db_log_message(user.id, user.username, user.full_name, is_command=is_command)
+
+        current_rank = db_get_user_rank(user.id)
+        is_creator = (user.id == 8049751536)
+        min_rank = db_get_command_rank("действие")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+.")
+            return
+
+        await funmodule.command_action(update, context, stripped_lower)
+        return
+
     db_log_message(user.id, user.username, user.full_name, is_command=is_command)
 
 async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -194,29 +212,47 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # 1. Справка по командам (!хелп / !помощь)
     if text in ("!хелп", "!помощь"):
+        cmd_ranks = db_get_command_ranks()
         help_text = (
             "📖 <b>Справка по командам бота:</b>\n\n"
             "💬 <code>!карма</code> или <code>!топ</code> — Показать топ участников по общению и прогулкам.\n"
             "👤 <code>!моя карма</code> или <code>!моякарма</code> — Показать личную статистику и ваш ранг.\n"
             "❓ <code>!хелп</code> или <code>!помощь</code> — Вызов этого меню.\n"
         )
-        
-        if is_creator or current_rank >= 3:
+
+        if is_creator or current_rank >= cmd_ranks.get("действие", 0):
             help_text += (
-                f"\n⚡ <b>Команды модерации ({format_rank(3)}+):</b>\n"
+                "🎭 <code>!действия</code> — Список действий, которые можно применить к участнику ответом на его сообщение.\n"
+            )
+
+        if is_creator or current_rank >= cmd_ranks.get("отменить_выбор", 3):
+            help_text += (
+                f"\n⚡ <b>Команды модерации ({format_rank(cmd_ranks.get('отменить_выбор', 3))}+):</b>\n"
                 "🚫 <code>!отменить выбор [причина]</code> — Отмена планового вечернего опроса на сегодня.\n"
             )
-        if is_creator or current_rank >= 4:
+        if is_creator or current_rank >= cmd_ranks.get("форс", 4):
             help_text += (
-                "📍 <code>!форс [Место]</code> — Преждевременный выбор места и запуск опроса посещаемости.\n"
+                f"📍 <code>!форс [Место]</code> — Преждевременный выбор места и запуск опроса посещаемости. (Ранг {format_rank(cmd_ranks.get('форс', 4))}+)\n"
             )
+        if is_creator or current_rank >= cmd_ranks.get("обнулить", 6):
+            help_text += (
+                f"🔄 <code>!обнулить [@username / ID]</code> — Сбросить всю карму, шаги и дни молчания (или ответом). (Ранг {format_rank(cmd_ranks.get('обнулить', 6))}+)\n"
+            )
+        if is_creator or current_rank >= cmd_ranks.get("переименовать_ранг", 6):
+            help_text += (
+                f"🏷 <code>!команда [0-6] [новое название]</code> — Переименовать ранг доступа. (Ранг {format_rank(cmd_ranks.get('переименовать_ранг', 6))}+)\n"
+            )
+        if is_creator or current_rank >= cmd_ranks.get("тест_опрос", 6):
+            help_text += (
+                f"🧪 <code>/test_poll</code> — Принудительный мгновенный запуск тестового опроса. (Ранг {format_rank(cmd_ranks.get('тест_опрос', 6))}+)\n"
+            )
+
         if is_creator or current_rank >= 6:
             help_text += (
-                f"\n👑 <b>Команды Создателя ({format_rank(6)}):</b>\n"
+                f"\n👑 <b>Команды Создателя ({format_rank(6)}, не настраивается):</b>\n"
                 "⚙️ <code>!сет ранк [@username / ID] [0-6]</code> — Назначить ранг доступа.\n"
-                "🔄 <code>!обнулить [@username / ID]</code> — Сбросить всю карму, шаги и дни молчания (или ответом).\n"
-                "🏷 <code>!команда [0-6] [новое название]</code> — Переименовать ранг доступа.\n"
-                "🧪 <code>/test_poll</code> — Принудительный мгновенный запуск тестового опроса.\n"
+                "🔐 <code>!доступ [команда] [0-6]</code> — Настроить минимальный ранг доступа к команде.\n"
+                "🩹 <code>!исправить ранги</code> — Разово сбросить всех со рангом 1 обратно в Участники (0).\n"
             )
             
         help_text += f"\n🎖 <i>Ваш текущий уровень доступа: {format_rank(current_rank, is_creator)}</i>"
@@ -233,8 +269,9 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # 3. Команда !отменить выбор (причина) — Ранг >= 3
     if text.startswith("!отменить выбор"):
-        if not is_creator and current_rank < 3:
-            await update.message.reply_text(f"⛔ Недостаточно прав. Требуется ранг {format_rank(3)}+. Ваш ранг: {format_rank(current_rank)}")
+        min_rank = db_get_command_rank("отменить_выбор")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Недостаточно прав. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
         
         reason = raw_text[15:].strip()
@@ -249,8 +286,9 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # NEW: 4. Команда !форс [Место] + перенос строки для причины — Ранг >= 4
     if text.startswith("!форс"):
-        if not is_creator and current_rank < 4:
-            await update.message.reply_text(f"⛔ Недостаточно прав. Требуется ранг {format_rank(4)}+. Ваш ранг: {format_rank(current_rank)}")
+        min_rank = db_get_command_rank("форс")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Недостаточно прав. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
 
         # Разделяем строку по переносу (Shift+Enter), чтобы отделить первую строку от причины
@@ -360,10 +398,11 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"✅ Пользователю {display_name} успешно присвоен ранг {format_rank(rank_val)}", parse_mode=ParseMode.HTML)
         return
 
-    # 6. Команда !обнулить — Ранг 6
+    # 6. Команда !обнулить — по умолчанию Ранг 6, настраивается через !доступ
     if text.startswith("!обнулить"):
-        if not is_creator and current_rank < 6:
-            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+        min_rank = db_get_command_rank("обнулить")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Эта команда доступна только с ранга {format_rank(min_rank)}.")
             return
 
         parts = raw_text.split()
@@ -411,10 +450,11 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=reply_markup
         )
         return
-    # 7. Команда !команда [ранг] [новое название] — Ранг 6, переименование рангов
+    # 7. Команда !команда [ранг] [новое название] — по умолчанию Ранг 6, настраивается через !доступ
     if text.startswith("!команда"):
-        if not is_creator and current_rank < 6:
-            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+        min_rank = db_get_command_rank("переименовать_ранг")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Эта команда доступна только с ранга {format_rank(min_rank)}.")
             return
 
         parts = raw_text.split(maxsplit=2)
@@ -447,6 +487,78 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             f"✅ Ранг {rank_val} переименован: <b>{escape(old_name)}</b> → <b>{escape(new_name)}</b>",
             parse_mode=ParseMode.HTML
+        )
+        return
+
+    # 8. Команда !доступ [команда] [ранг] — Ранг 6 (жестко, не настраивается — управляет самой системой прав)
+    if text.startswith("!доступ"):
+        if not is_creator and current_rank < 6:
+            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+            return
+
+        parts = raw_text.split()
+        if len(parts) < 3:
+            current_ranks = db_get_command_ranks()
+            lines = ["🔐 <b>Текущий минимальный ранг доступа к командам:</b>\n"]
+            for key, label in config.COMMAND_LABELS.items():
+                lines.append(f"<code>{key}</code> — {label}: {format_rank(current_ranks.get(key, 6))}")
+            lines.append("\nФормат: <code>!доступ [команда] [0-6]</code>\nПример: <code>!доступ форс 3</code>")
+            await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+            return
+
+        cmd_key = parts[1].lower()
+        if cmd_key not in config.COMMAND_LABELS:
+            valid_keys = ", ".join(config.COMMAND_LABELS.keys())
+            await update.message.reply_text(f"❌ Неизвестная команда «{escape(cmd_key)}». Доступные варианты: {valid_keys}")
+            return
+
+        try:
+            rank_val = int(parts[2])
+        except ValueError:
+            await update.message.reply_text("⚠️ Ранг должен быть числом от 0 до 6.")
+            return
+
+        if not (0 <= rank_val <= 6):
+            await update.message.reply_text("⚠️ Ранг должен быть числом от 0 до 6.")
+            return
+
+        db_set_command_rank(cmd_key, rank_val)
+        await update.message.reply_text(
+            f"✅ Теперь «{config.COMMAND_LABELS[cmd_key]}» доступна с ранга {format_rank(rank_val)} и выше.",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # 9. Список действий между участниками
+    if text in ("!действия", "!действие"):
+        lines = ["🎭 <b>Действия, доступные ответом на сообщение участника:</b>\n"]
+        for key, (emoji, _) in funmodule.ACTIONS.items():
+            lines.append(f"{emoji} <code>!{key}</code>")
+        min_rank = db_get_command_rank("действие")
+        lines.append(f"\nℹ️ Ответьте одной из этих команд на сообщение участника. Требуется ранг {format_rank(min_rank)}+.")
+        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+        return
+
+    # 10. Сами действия (!обнять, !ударить и т.д.) — ответ на сообщение другого участника
+    action_key = text[1:] if text.startswith("!") else text
+    if action_key in funmodule.ACTIONS:
+        min_rank = db_get_command_rank("действие")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
+            return
+        await funmodule.command_action(update, context, action_key)
+        return
+
+    # 11. Команда !исправить ранги — Ранг 6 (жестко). Одноразовая массовая починка бага дефолтного ранга.
+    if text.startswith("!исправить ранги"):
+        if not is_creator and current_rank < 6:
+            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+            return
+
+        fixed_count = db_fix_default_rank_bug()
+        await update.message.reply_text(
+            f"✅ Готово. Сброшено на «{db_get_rank_name(0)}» участников: {fixed_count}.\n"
+            f"ℹ️ Затронуты только те, у кого стоял ранг 1 — ранги 2+ не трогались."
         )
         return
 
@@ -744,9 +856,10 @@ async def daily_activity_check(context: ContextTypes.DEFAULT_TYPE):
 async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     current_rank = db_get_user_rank(user_id)
-    
-    if user_id != 8049751536 and current_rank < 6:
-        await update.message.reply_text(f"⛔ Отказано в доступе. Ваш ранг: {format_rank(current_rank)}. Требуется ранг: {format_rank(6)}.")
+    min_rank = db_get_command_rank("тест_опрос")
+
+    if user_id != 8049751536 and current_rank < min_rank:
+        await update.message.reply_text(f"⛔ Отказано в доступе. Ваш ранг: {format_rank(current_rank)}. Требуется ранг: {format_rank(min_rank)}.")
         return
 
     message = await update.message.reply_poll(
