@@ -1164,6 +1164,63 @@ def main():
     jq.run_daily(funmodule.daily_balabol_check, time=dtime(hour=22, minute=00, tzinfo=config.KYIV_TZ))
     print("Бот успешно запущен.")
     app.run_polling()
+# ====================== КОМАНДА !voic ======================
+async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Генерирует голосовое сообщение голосом Хоумлендера"""
+    if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
+        return
+    
+    user = update.effective_user
+    text = ' '.join(context.args).strip()
+    
+    if not text:
+        await update.message.reply_text(
+            "✅ Использование:\n`!voic Твой текст здесь`", 
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+    
+    if len(text) > 600:
+        await update.message.reply_text("❌ Слишком длинный текст (макс 600 символов).")
+        return
 
+    # Ограничение: только ты или высокие ранги
+    if user.id != 8049751536 and db_get_user_rank(user.id) < 5:
+        await update.message.reply_text("⛔ У тебя нет доступа к этой команде.")
+        return
+
+    status_msg = await update.message.reply_text("🎙 Генерирую голос Хоумлендера...")
+
+    try:
+        client = FishAudio(api_key=config.FISH_API_KEY)
+        
+        audio = client.tts.convert(
+            text=text,
+            reference_id=config.HOMELANDER_VOICE_ID,
+            # Можно добавить: speed=1.05, top_k=..., etc.
+        )
+        
+        # Сохраняем во временный файл
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
+            save(audio, tmp_file.name)
+            tmp_path = tmp_file.name
+
+        # Отправляем голосовое
+        with open(tmp_path, 'rb') as voice:
+            await context.bot.send_voice(
+                chat_id=update.message.chat_id,
+                voice=voice,
+                caption=f"🎤 {user.full_name or user.username}",
+                reply_to_message_id=update.message.message_id
+            )
+        
+        # Удаляем временный файл
+        os.unlink(tmp_path)
+        
+        await status_msg.delete()  # удаляем сообщение "Генерирую..."
+
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Ошибка при генерации голоса:\n{str(e)}")
+        print(f"[VOIC ERROR] {e}")
 if __name__ == "__main__":
     main()
