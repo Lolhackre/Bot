@@ -126,7 +126,7 @@ def format_silent_ping(user_id):
 def format_rank(rank, is_creator=False):
     """Возвращает читаемое название ранга, например 'Заместитель (5)'"""
     if is_creator:
-        return "Создатель"
+        return "Тех.Админ"
     name = db_get_rank_name(rank)
     return f"{name} ({rank})"
 
