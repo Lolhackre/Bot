@@ -134,24 +134,29 @@ ACTIONS = {
     # Добавь ещё столько, сколько нужно — я могу дать ещё 100
 }
 
-async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action_key: str):
-    """Обрабатывает действие одного участника к другому (ответом на сообщение)."""
-    if not update.message.reply_to_message:
-        await update.message.reply_text("⚠️ Ответьте этой командой на сообщение того, к кому хотите применить действие.")
-        return
-
+async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action_key: str, target=None):
+    """Обрабатывает действие одного участника к другому.
+    target: опциональный кортеж (user_id, username, full_name), уже определённый вызывающей стороной
+    (по @юзер/ID). Если не передан — используется ответ на сообщение (reply)."""
     actor = update.effective_user
-    target_user = update.message.reply_to_message.from_user
 
-    if target_user.is_bot:
-        await update.message.reply_text("🤖 Ботов трогать нельзя, у них и так тяжелая жизнь.")
+    if target is not None:
+        target_id, target_username, target_full_name = target
+    elif update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        if target_user.is_bot:
+            await update.message.reply_text("🤖 Ботов трогать нельзя, у них и так тяжелая жизнь.")
+            return
+        target_id, target_username, target_full_name = target_user.id, target_user.username, target_user.full_name
+    else:
+        await update.message.reply_text("⚠️ Ответьте этой командой на сообщение того, к кому хотите применить действие, или укажите @username/ID.")
         return
 
     emoji, verb = ACTIONS[action_key]
     actor_link = _format_user_link(actor.id, actor.username, actor.full_name)
-    target_link = _format_user_link(target_user.id, target_user.username, target_user.full_name)
+    target_link = _format_user_link(target_id, target_username, target_full_name)
 
-    if target_user.id == actor.id:
+    if target_id == actor.id:
         text = f"{emoji} {actor_link} {verb} самого себя. Ситуация..."
     else:
         text = f"{emoji} {actor_link} {verb} {target_link}!"
