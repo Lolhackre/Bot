@@ -115,10 +115,10 @@ def db_reset_user_stats(user_id):
 # ---------- Вспомогательные функции ----------
 def format_user_link(user_id, username, full_name):
     display_name = escape(full_name or username or str(user_id))
-    return f'<a href="tg://user?id={user_id}">{display_name}</a>'
+    return f'<a href="https://t.me/{username}">{display_name}</a>'
 
 def format_silent_ping(user_id):
-    return f'<a href="tg://user?id={user_id}">&#8288;</a>'
+    return f'<a href="https://t.me/{user_id}">&#8288;</a>'
 
 # ---------- Базовые команды ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -190,6 +190,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "📖 <b>Справка по командам бота:</b>\n\n"
             "💬 <code>!карма</code> или <code>!топ</code> — Показать топ участников по общению и прогулкам.\n"
             "👤 <code>!моя карма</code> или <code>!моякарма</code> — Показать личную статистику и ваш ранг.\n"
+            "❓ <code>!отмазка</code> — Креативная отмазка место вас.\n"
             "❓ <code>!хелп</code> или <code>!помощь</code> — Вызов этого меню.\n"
         )
         
