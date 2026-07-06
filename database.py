@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from config import DB_PATH, MESSAGE_SCORE, WALK_SCORE, NOT_WALKING_PENALTY, DEFAULT_RANK_NAMES
+from config import DB_PATH, MESSAGE_SCORE, WALK_SCORE, NOT_WALKING_PENALTY, DEFAULT_RANK_NAMES, DEFAULT_COMMAND_RANKS
 
 def db_connect():
     conn = sqlite3.connect(DB_PATH)
@@ -58,6 +58,18 @@ def db_init():
                 INSERT OR IGNORE INTO rank_names (rank, name) VALUES (?, ?)
             """, (rank, name))
 
+        # Таблица минимального ранга доступа для настраиваемых команд (!доступ)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS command_access (
+                command TEXT PRIMARY KEY,
+                min_rank INTEGER NOT NULL
+            )
+        """)
+        for cmd, rank in DEFAULT_COMMAND_RANKS.items():
+            conn.execute("""
+                INSERT OR IGNORE INTO command_access (command, min_rank) VALUES (?, ?)
+            """, (cmd, rank))
+
         conn.commit()
 
 def db_log_message(user_id, username, full_name, is_command=False):
@@ -67,8 +79,8 @@ def db_log_message(user_id, username, full_name, is_command=False):
     
     with db_connect() as conn:
         conn.execute("""
-            INSERT INTO users (user_id, username, full_name, messages_count, daily_messages_count, days_inactive, last_activity)
-            VALUES (?, ?, ?, ?, ?, 0, ?)
+            INSERT INTO users (user_id, username, full_name, messages_count, daily_messages_count, permission_rank, days_inactive, last_activity)
+            VALUES (?, ?, ?, ?, ?, 0, 0, ?)
             ON CONFLICT(user_id) DO UPDATE SET 
                 username = excluded.username, 
                 full_name = excluded.full_name,
@@ -84,6 +96,14 @@ def db_get_user_rank(user_id):
         cur = conn.execute("SELECT permission_rank FROM users WHERE user_id = ?", (user_id,))
         row = cur.fetchone()
         return row[0] if row else 1
+
+def db_fix_default_rank_bug():
+    """Сбрасывает ранг 1 (баг старого дефолта) обратно в 0 — Участник.
+    Не трогает ранги 2 и выше, так как они точно назначались вручную."""
+    with db_connect() as conn:
+        cur = conn.execute("UPDATE users SET permission_rank = 0 WHERE permission_rank = 1")
+        conn.commit()
+        return cur.rowcount
 
 def db_set_user_rank(user_id, rank):
     with db_connect() as conn:
@@ -114,6 +134,32 @@ def db_set_rank_name(rank, name):
             INSERT INTO rank_names (rank, name) VALUES (?, ?)
             ON CONFLICT(rank) DO UPDATE SET name = excluded.name
         """, (rank, name))
+        conn.commit()
+
+def db_get_command_ranks():
+    """Возвращает словарь {ключ_команды: минимальный_ранг} для всех настраиваемых команд"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT command, min_rank FROM command_access")
+        rows = cur.fetchall()
+    ranks = dict(DEFAULT_COMMAND_RANKS)  # фолбек на случай отсутствия записи
+    ranks.update({cmd: rank for cmd, rank in rows})
+    return ranks
+
+def db_get_command_rank(command):
+    """Возвращает минимальный ранг доступа для конкретной команды (с фолбеком на дефолт)"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT min_rank FROM command_access WHERE command = ?", (command,))
+        row = cur.fetchone()
+    if row is not None:
+        return row[0]
+    return DEFAULT_COMMAND_RANKS.get(command, 6)
+
+def db_set_command_rank(command, min_rank):
+    with db_connect() as conn:
+        conn.execute("""
+            INSERT INTO command_access (command, min_rank) VALUES (?, ?)
+            ON CONFLICT(command) DO UPDATE SET min_rank = excluded.min_rank
+        """, (command, min_rank))
         conn.commit()
 
 def db_add_walk(user_id):
