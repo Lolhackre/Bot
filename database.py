@@ -22,7 +22,10 @@ def db_init():
                 permission_rank INTEGER DEFAULT 0,
                 days_inactive INTEGER DEFAULT 0,
                 last_activity TEXT,
-                daily_messages_count INTEGER DEFAULT 0
+                daily_messages_count INTEGER DEFAULT 0,
+                nickname TEXT,
+                status_text TEXT,
+                birthday TEXT
             )
         """)
         
@@ -31,6 +34,21 @@ def db_init():
             conn.execute("ALTER TABLE users ADD COLUMN daily_messages_count INTEGER DEFAULT 0;")
         except sqlite3.OperationalError:
             pass  # Поле уже существует, всё ок
+
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN nickname TEXT;")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN status_text TEXT;")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN birthday TEXT;")  # хранится в формате ДД.ММ
+        except sqlite3.OperationalError:
+            pass
             
         # Таблица опросов
         conn.execute("""
@@ -203,6 +221,55 @@ def db_get_user_stats(user_id):
     with db_connect() as conn:
         cur = conn.execute(f"SELECT user_id, username, full_name, messages_count, (messages_count * {MESSAGE_SCORE}), walks_count, walk_karma, permission_rank, days_inactive FROM users WHERE user_id = ?", (user_id,))
         return cur.fetchone()
+
+def db_set_nickname(user_id, nickname):
+    """Устанавливает (или сбрасывает, если nickname=None) кастомный ник участника."""
+    with db_connect() as conn:
+        conn.execute("UPDATE users SET nickname = ? WHERE user_id = ?", (nickname, user_id))
+        conn.commit()
+
+def db_get_nickname(user_id):
+    with db_connect() as conn:
+        cur = conn.execute("SELECT nickname FROM users WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+def db_set_status(user_id, status_text):
+    """Устанавливает (или сбрасывает, если status_text=None) статус/описание профиля."""
+    with db_connect() as conn:
+        conn.execute("UPDATE users SET status_text = ? WHERE user_id = ?", (status_text, user_id))
+        conn.commit()
+
+def db_get_status(user_id):
+    with db_connect() as conn:
+        cur = conn.execute("SELECT status_text FROM users WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+def db_set_birthday(user_id, birthday_str):
+    """Устанавливает (или сбрасывает, если birthday_str=None) день рождения в формате ДД.ММ"""
+    with db_connect() as conn:
+        conn.execute("UPDATE users SET birthday = ? WHERE user_id = ?", (birthday_str, user_id))
+        conn.commit()
+
+def db_get_birthday(user_id):
+    with db_connect() as conn:
+        cur = conn.execute("SELECT birthday FROM users WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+def db_get_profile_extra(user_id):
+    """Возвращает (nickname, status_text, birthday) одним запросом — для показа в !моякарма"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT nickname, status_text, birthday FROM users WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        return row if row else (None, None, None)
+
+def db_get_todays_birthdays(day_month_str):
+    """Возвращает [(user_id, username, full_name, nickname), ...] у кого сегодня ДР (формат ДД.ММ)"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT user_id, username, full_name, nickname FROM users WHERE birthday = ?", (day_month_str,))
+        return cur.fetchall()
 
 def db_get_all_users():
     with db_connect() as conn:
