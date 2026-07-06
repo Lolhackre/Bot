@@ -59,3 +59,6 @@ COMMAND_LABELS = {
     "отмазка": "!отмазка — случайная отмазка",
     "действие": "!обнять/!ударить и т.д. — действия между участниками",
 }
+# Fish Audio TTS
+FISH_API_KEY = os.environ.get("FISH_API_KEY")
+HOMELANDER_VOICE_ID = "08bca5e1b90d4de58ce87d7a00693c56"
