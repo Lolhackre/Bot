@@ -529,14 +529,16 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-      # 9. Список действий между участниками
+       # 9. Список действий между участниками
     if text in ("!действия", "!действие"):
-        lines = ["🎭 <b>Все доступные действия (включая 18+):</b>\\n"]
-        for key, (emoji, _) in funmodule.ACTIONS.items():
+        lines = ["🎭 <b>Все доступные действия (включая 18+):</b>\n\n"]
+        for key, (emoji, _) in sorted(funmodule.ACTIONS.items()):
             lines.append(f"{emoji} <code>!{key}</code>")
+        
         min_rank = db_get_command_rank("действие")
-        lines.append(f"\\nℹ️ Ответь командой на сообщение участника или напиши !действие @username. Требуется ранг {format_rank(min_rank)}+.")
-        await update.message.reply_text("\\n".join(lines), parse_mode=ParseMode.HTML)
+        lines.append(f"\nℹ️ Используй ответом на сообщение или !действие @username\nТребуется ранг {format_rank(min_rank)}+.")
+        
+        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
         return
 
     # 10. Сами действия (!обнять, !ударить и т.д.) — ответ на сообщение другого участника
