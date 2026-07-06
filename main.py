@@ -1139,12 +1139,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
 
-
-    
     app.add_handler(CommandHandler("voic", command_voic))
-
-
-    
     app.add_handler(CommandHandler("voice", command_voic))
 
     jq = app.job_queue
