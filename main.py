@@ -154,50 +154,55 @@ def format_rank(rank, is_creator=False):
     name = db_get_rank_name(rank)
     return f"{name} ({rank})"
 
-async def resolve_target_user(update, context, arg_text):
-    """Универсальное определение цели команды:
-    сначала пробуем @username/ID из arg_text, затем — ответ на сообщение (reply).
-    Для @username сначала спрашиваем у самого Telegram (get_chat) — это всегда
-    актуальные данные, в отличие от локального кеша в базе, который может устареть
-    (человек мог сменить username, или бот его ещё не сохранял).
-    Возвращает (user_id, username, full_name) или None, если цель не определена."""
-    if arg_text:
-        arg_text = arg_text.strip()
-
-        if arg_text.startswith("@"):
-            # 1. Пробуем спросить у Telegram напрямую — свежие данные
-            try:
-                chat = await context.bot.get_chat(arg_text)
-                return (chat.id, chat.username, chat.full_name)
-            except Exception:
-                pass
-            # 2. Фоллбек на локальную базу, если Telegram не смог отдать данные
-            target_id = db_get_user_id_by_username(arg_text)
-            if target_id is not None:
-                with sqlite3.connect(config.DB_PATH) as conn:
-                    cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
-                    row = cur.fetchone()
-                if row:
-                    return (target_id, row[0], row[1])
-                return (target_id, None, None)
-        else:
-            try:
-                target_id = int(arg_text)
-            except ValueError:
-                target_id = None
-            if target_id is not None:
-                with sqlite3.connect(config.DB_PATH) as conn:
-                    cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
-                    row = cur.fetchone()
-                if row:
-                    return (target_id, row[0], row[1])
-                return (target_id, None, None)
-
-    if update.message.reply_to_message:
+async def resolve_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE, arg_text: str = None):
+    """
+    Определяет целевого пользователя.
+    1. Если есть reply_to_message — берёт автора реплая.
+    2. Если передан arg_text (ID или @username) — ищет по нему (сначала локально, затем через Telegram).
+    Возвращает кортеж (user_id, username, full_name) или None.
+    """
+    # 1. Проверяем реплай (он приоритетнее всего)
+    if update.message and update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
         if target_user.is_bot:
             return None
         return (target_user.id, target_user.username, target_user.full_name)
+
+    # 2. Если реплая нет, но есть текстовый аргумент (@username или ID)
+    if not arg_text:
+        return None
+
+    arg_text = arg_text.strip()
+    target_id = None
+
+    # Если передан числовой ID
+    if arg_text.isdigit():
+        target_id = int(arg_text)
+    # Если передан @username
+    elif arg_text.startswith("@"):
+        username_to_search = arg_text[1:].lower()
+        # Достаём ID из локальной базы данных
+        target_id = db_get_user_id_by_username(username_to_search)
+
+    # Если мы нашли ID (в базе или передали числом), запрашиваем свежие данные у Telegram
+    if target_id:
+        try:
+            chat = await context.bot.get_chat(target_id)
+            # Собираем full_name
+            first = chat.first_name or ""
+            last = chat.last_name or ""
+            full_name = f"{first} {last}".strip() or chat.title or "Пользователь"
+            return (chat.id, chat.username, full_name)
+        except Exception:
+            # Если Telegram не ответил, но у нас есть данные в локальной БД, можно подстраховаться:
+            try:
+                with sqlite3.connect(config.DB_PATH) as conn:
+                    cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
+                    row = cur.fetchone()
+                    if row:
+                        return (target_id, row[0], row[1])
+            except Exception:
+                pass
 
     return None
 
