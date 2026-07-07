@@ -1092,14 +1092,22 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user = update.effective_user
-    text = ' '.join(context.args).strip()
+    raw_text = update.message.text or ""
+    
+    # Отрезаем "!voic" или "!voic " от начала сообщения
+    if raw_text.lower().startswith("!voic"):
+        text = raw_text[5:].strip()
+    else:
+        text = raw_text.strip()
     
     if not text:
         await update.message.reply_text(
-            "✅ Использование:\n`!voic Твой текст здесь`", 
-            parse_mode=ParseMode.MARKDOWN
+            "✅ Использование:\n<code>!voic Твой текст здесь</code>", 
+            parse_mode=ParseMode.HTML
         )
         return
+    
+    # ... (дальше ваш код без изменений)
     
     if len(text) > 600:
         await update.message.reply_text("❌ Слишком длинный текст (макс 600 символов).")
@@ -1189,6 +1197,7 @@ def main():
     app.add_handler(CommandHandler(["karma", "top"], show_karma))
     app.add_handler(CommandHandler("mykarma", show_my_karma))
     app.add_handler(CommandHandler("test_poll", test_poll_command))
+    app.add_handler(CommandHandler("voic", command_voic))
 
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.UpdateType.EDITED, handle_private_message))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^[!+]") & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_text_command))
@@ -1223,6 +1232,6 @@ def main():
     print("Бот успешно запущен.")
     app.run_polling()
 
-    app.add_handler(CommandHandler("voic", command_voic))
+    
 if __name__ == "__main__":
     main()
