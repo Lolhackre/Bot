@@ -1107,50 +1107,60 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # ... (дальше ваш код без изменений)
-    
     if len(text) > 600:
         await update.message.reply_text("❌ Слишком длинный текст (макс 600 символов).")
         return
 
-    # Ограничение: только ты или высокие ранги
+    # Ограничение: только создатель или высокие ранги
     if user.id != 8049751536 and db_get_user_rank(user.id) < 5:
         await update.message.reply_text("⛔ У тебя нет доступа к этой команде.")
         return
 
     status_msg = await update.message.reply_text("🎙 Генерирую голос Хоумлендера...")
+    tmp_path = None
 
     try:
-        client = FishAudio(api_key=config.FISH_API_KEY)
+        # Импортируем асинхронный клиент, чтобы не блокировать поток бота
+        from fishaudio import FishAudioAsync
         
-        audio = client.tts.convert(
-            text=text,
-            reference_id=config.HOMELANDER_VOICE_ID,
-            # Можно добавить: speed=1.05, top_k=..., etc.
-        )
+        async with FishAudioAsync(api_key=config.FISH_API_KEY) as client:
+            # Вызываем tts.convert асинхронно через await
+            audio = await client.tts.convert(
+                text=text,
+                reference_id=config.HOMELANDER_VOICE_ID,
+            )
         
         # Сохраняем во временный файл
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
             save(audio, tmp_file.name)
             tmp_path = tmp_file.name
 
+        # Безопасное отображение имени
+        display_name = escape(user.full_name or user.username or "Пользователь")
+
         # Отправляем голосовое
         with open(tmp_path, 'rb') as voice:
             await context.bot.send_voice(
                 chat_id=update.message.chat_id,
                 voice=voice,
-                caption=f"🎤 {user.full_name or user.username}",
-                reply_to_message_id=update.message.message_id
+                caption=f"🎤 {display_name}",
+                reply_to_message_id=update.message.message_id,
+                parse_mode=ParseMode.HTML
             )
         
-        # Удаляем временный файл
-        os.unlink(tmp_path)
-        
-        await status_msg.delete()  # удаляем сообщение "Генерирую..."
+        await status_msg.delete()  # Удаляем сообщение "Генерирую..."
 
     except Exception as e:
-        await status_msg.edit_text(f"❌ Ошибка при генерации голоса:\n{str(e)}")
+        await status_msg.edit_text(f"❌ Ошибка при генерации голоса:\n<code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
         print(f"[VOIC ERROR] {e}")
+        
+    finally:
+        # Гарантированное удаление временного файла в любых сценариях
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception as e:
+                print(f"[VOIC CLEANUP ERROR] Не удалось удалить файл {tmp_path}: {e}")
 
 async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
