@@ -1088,7 +1088,6 @@ async def daily_birthday_check(context: ContextTypes.DEFAULT_TYPE):
 
 # ====================== КОМАНДА !voic ======================
 async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Генерирует голосовое сообщение голосом Хоумлендера"""
     if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
         return
     
@@ -1198,28 +1197,24 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
 
-        """Простая проверка"""
-        text = ' '.join(context.args) or "тест"
-        await update.message.reply_text(f"✅ Команда !voic работает!\nТекст: {text}")
-
-        jq = app.job_queue
+    jq = app.job_queue
+    
+    async def poll_job_wrapper(ctx):
+        await send_daily_poll(ctx)
         
-        async def poll_job_wrapper(ctx):
-            await send_daily_poll(ctx)
+        now = datetime.now(config.KYIV_TZ)
+        tomorrow_13 = (now + timedelta(days=1)).replace(hour=13, minute=0, second=0, microsecond=0)
+        
+        with sqlite3.connect(config.DB_PATH) as conn:
+            cur = conn.execute("SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1")
+            row = cur.fetchone()
             
-            now = datetime.now(config.KYIV_TZ)
-            tomorrow_13 = (now + timedelta(days=1)).replace(hour=13, minute=0, second=0, microsecond=0)
-            
-            with sqlite3.connect(config.DB_PATH) as conn:
-                cur = conn.execute("SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1")
-                row = cur.fetchone()
-                
-            if row:
-                ctx.job_queue.run_once(
-                    close_place_and_start_attendance,
-                    when=tomorrow_13,
-                    data={"poll_id": row[0], "message_id": row[1], "chat_id": config.MAIN_GROUP_CHAT_ID}
-                )
+        if row:
+            ctx.job_queue.run_once(
+                close_place_and_start_attendance,
+                when=tomorrow_13,
+                data={"poll_id": row[0], "message_id": row[1], "chat_id": config.MAIN_GROUP_CHAT_ID}
+            )
 
     jq.run_daily(poll_job_wrapper, time=dtime(hour=20, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(daily_activity_check, time=dtime(hour=4, minute=0, tzinfo=config.KYIV_TZ))
