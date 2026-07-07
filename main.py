@@ -729,7 +729,44 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
         await command_voic(update, context)
         return
-    
+# ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    current_rank = db_get_user_rank(user_id)
+
+    # Проверка прав: только создатель или ранг 6 могут обнулять
+    if query.from_user.id != 8049751536 and current_rank < 6:
+        await query.answer(f"⛔ Вы не являетесь создателем ({format_rank(6)}), вам нельзя нажимать эту кнопку!", show_alert=True)
+        return
+
+    data = query.data
+    await query.answer()
+
+    if data.startswith("reset_yes:"):
+        target_id = int(data.split(":")[1])
+        display_name = f"ID: {target_id}"
+        
+        # Пытаемся получить красивое имя из локальной БД для финального сообщения
+        try:
+            import sqlite3
+            with sqlite3.connect(config.DB_PATH) as conn:
+                cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
+                row = cur.fetchone()
+                if row:
+                    display_name = format_user_link(target_id, row[0], row[1])
+        except Exception:
+            pass
+
+        # Вызываем функцию обнуления из вашей БД
+        db_reset_user_stats(target_id)
+        await query.edit_message_text(
+            text=f"🔄 Статистика пользователя {display_name} была полностью обнулена администратором.",
+            parse_mode=ParseMode.HTML
+        )
+
+    elif data.startswith("reset_no:"):
+        await query.edit_message_text(text="❌ Операция обнуления была отменена.")  
 async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     m_rows = db_top_by_messages(10)
     w_rows = db_top_by_walks(10)
