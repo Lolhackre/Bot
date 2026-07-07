@@ -271,8 +271,18 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # Действие словом-триггером БЕЗ "!" — ответом на сообщение ИЛИ словом + @юзер (например "ударить @юзер")
-    looks_like_target = bool(bare_rest) and (bare_rest.startswith("@") or bare_rest.isdigit())
-    if bare_first in funmodule.ACTIONS and (update.message.reply_to_message or looks_like_target):
+    if bare_first in funmodule.ACTIONS:
+        has_reply = bool(update.message.reply_to_message)
+        has_valid_arg = bool(bare_rest) and (bare_rest.startswith("@") or bare_rest.isdigit())
+
+        # Жёсткий фильтр: если после триггера идёт текст, но это не юзернейм и не ID — полностью ИГНОРИРУЕМ
+        if bare_rest and not has_valid_arg:
+            return
+
+        # Если нет ни ответа на сообщение, ни валидного аргумента — также выходим без реакции
+        if not (has_reply or has_valid_arg):
+            return
+
         is_command = True
         db_log_message(user.id, user.username, user.full_name, is_command=is_command)
 
@@ -287,6 +297,7 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
         if resolved is None:
             await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username.")
             return
+            
         await funmodule.command_action(update, context, bare_first, resolved)
         return
 
@@ -446,30 +457,27 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"🚫 Вечерний опрос отменен администратором.\n📍 <b>Причина:</b> {escape(reason)}", parse_mode=ParseMode.HTML)
         return
 
-    # NEW: 4. Команда !форс [Место] + перенос строки для причины — Ранг >= 4
+    # 4. Команда !форс [Место] — Ранг >= 4
     if text.startswith("!форс"):
         min_rank = db_get_command_rank("форс")
         if not is_creator and current_rank < min_rank:
             await update.message.reply_text(f"⛔ Недостаточно прав. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
 
-        # Разделяем строку по переносу (Shift+Enter), чтобы отделить первую строку от причины
         lines = raw_text.split('\n')
         first_line = lines[0].strip()
         
-        # Место берется из первой строки после команды "!форс "
         place_name = first_line[5:].strip()
         if not place_name:
             await update.message.reply_text("⚠️ Используйте формат: <code>!форс Место</code> (и по желанию с новой строки укажите причину)", parse_mode=ParseMode.HTML)
             return
 
-        # Если есть строки ниже — собираем их в причину
         reason_text = None
         if len(lines) > 1:
             reason_text = "\n".join(lines[1:]).strip()
 
         global FORCED_ATTENDANCE_ACTIVE
-        FORCED_ATTENDANCE_ACTIVE = True  # Блокируем автоматическую вечернюю цепочку
+        FORCED_ATTENDANCE_ACTIVE = True
 
         msg_text = f"📍 Администратор утвердил место для сегодняшней прогулки: <b>{escape(place_name)}</b>\n"
         if reason_text:
@@ -478,7 +486,6 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         await update.message.reply_text(msg_text, parse_mode=ParseMode.HTML)
 
-        # Сразу генерируем опрос посещаемости
         attendance_options = ["Да, гуляю", "Нет, не гуляю", "Еще подумаю"]
         attendance_msg = await context.bot.send_poll(
             chat_id=update.message.chat_id,
@@ -514,10 +521,8 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         rank_val = None
         display_name = None 
 
+        # Вычисляем числовое значение ранга
         if update.message.reply_to_message:
-            target_user = update.message.reply_to_message.from_user
-            target_id = target_user.id
-            display_name = format_user_link(target_user.id, target_user.username, target_user.full_name)
             if len(parts) >= 3:
                 try:
                     rank_val = int(parts[2])
@@ -525,47 +530,32 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                     pass
         else:
             if len(parts) >= 4:
-                target_param = parts[2]
                 try:
                     rank_val = int(parts[3])
                 except ValueError:
                     pass
-                
-                if target_param.startswith("@"):
-                    try:
-                        chat = await context.bot.get_chat(target_param)
-                        target_id = chat.id
-                        display_name = format_user_link(chat.id, chat.username, chat.full_name)
-                    except Exception:
-                        target_id = db_get_user_id_by_username(target_param.lower())
-                        display_name = escape(target_param)
-                else:
-                    try:
-                        target_id = int(target_param)
-                        display_name = f"ID: {target_id}"
-                    except ValueError:
-                        target_id = None
 
         if rank_val is None or not (0 <= rank_val <= 6):
             rank_list = ", ".join(f"{r} — {n}" for r, n in sorted(db_get_rank_names().items()))
             await update.message.reply_text(f"⚠️ Неверный формат ранга. Используйте число от 0 до 6.\nПример: `!сет ранк @username 3` или ответом `!сет ранк 3`.\n\nДоступные ранги: {rank_list}")
             return
 
-        if target_id is None:
+        # Ищем цель через универсальный resolve_target_user
+        target_arg = None if update.message.reply_to_message else (parts[2] if len(parts) >= 3 else None)
+        resolved = await resolve_target_user(update, context, target_arg)
+
+        if resolved is not None:
+            target_id, target_username, target_full_name = resolved
+            display_name = format_user_link(target_id, target_username, target_full_name)
+        else:
             await update.message.reply_text("❌ Не удалось найти пользователя.")
             return
-
-        with sqlite3.connect(config.DB_PATH) as conn:
-            cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
-            row = cur.fetchone()
-            if row:
-                display_name = format_user_link(target_id, row[0], row[1])
 
         db_set_user_rank(target_id, rank_val)
         await update.message.reply_text(f"✅ Пользователю {display_name} успешно присвоен ранг {format_rank(rank_val)}", parse_mode=ParseMode.HTML)
         return
 
-    # 6. Команда !обнулить — по умолчанию Ранг 6, настраивается через !доступ
+    # 6. Команда !обнулить — по умолчанию Ранг 6
     if text.startswith("!обнулить"):
         min_rank = db_get_command_rank("обнулить")
         if not is_creator and current_rank < min_rank:
@@ -573,40 +563,15 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
 
         parts = raw_text.split()
-        target_id = None
-        display_name = None
-
-        if update.message.reply_to_message:
-            target_user = update.message.reply_to_message.from_user
-            target_id = target_user.id
-            display_name = format_user_link(target_user.id, target_user.username, target_user.full_name)
-        else:
-            if len(parts) >= 2:
-                target_param = parts[1]
-                if target_param.startswith("@"):
-                    try:
-                        chat = await context.bot.get_chat(target_param)
-                        target_id = chat.id
-                        display_name = format_user_link(chat.id, chat.username, chat.full_name)
-                    except Exception:
-                        target_id = db_get_user_id_by_username(target_param.lower())
-                        display_name = escape(target_param)
-                else:
-                    try:
-                        target_id = int(target_param)
-                        display_name = f"ID: {target_id}"
-                    except ValueError:
-                        target_id = None
-
-        if target_id is None:
+        target_arg = None if update.message.reply_to_message else (parts[1] if len(parts) >= 2 else None)
+        
+        resolved = await resolve_target_user(update, context, target_arg)
+        if resolved is None:
             await update.message.reply_text("❌ Не удалось определить пользователя для обнуления. Укажите @username, ID или ответьте на его сообщение.")
             return
 
-        with sqlite3.connect(config.DB_PATH) as conn:
-            cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
-            row = cur.fetchone()
-            if row:
-                display_name = format_user_link(target_id, row[0], row[1])
+        target_id, target_username, target_full_name = resolved
+        display_name = format_user_link(target_id, target_username, target_full_name)
 
         keyboard = [
             [
@@ -622,7 +587,8 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=reply_markup
         )
         return
-    # 7. Команда !команда [ранг] [новое название] — по умолчанию Ранг 6, настраивается через !доступ
+
+    # 7. Команда !команда [ранг] [новое название] — по умолчанию Ранг 6
     if text.startswith("!команда"):
         min_rank = db_get_command_rank("переименовать_ранг")
         if not is_creator and current_rank < min_rank:
@@ -662,7 +628,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    # 8. Команда !доступ [команда] [ранг] — Ранг 6 (жестко, не настраивается — управляет самой системой прав)
+    # 8. Команда !доступ [команда] [ранг] — Ранг 6
     if text.startswith("!доступ"):
         if not is_creator and current_rank < 6:
             await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
@@ -701,7 +667,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-       # 9. Список действий между участниками
+    # 9. Список действий между участниками
     if text in ("!действия", "!действие"):
         lines = ["🎭 <b>Все доступные действия (включая 18+):</b>\n\n"]
         for key, (emoji, _) in sorted(funmodule.ACTIONS.items()):
@@ -713,23 +679,37 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
         return
 
-    # 10. Сами действия (!обнять, !ударить и т.д.) — ответом на сообщение ИЛИ с указанием @юзер/ID
+    # 10. Сами действия (!обнять, !ударить и т.д.) — с жёсткой валидацией аргументов
     action_parts = text[1:].split(maxsplit=1) if text.startswith("!") else [text]
     action_key = action_parts[0] if action_parts else ""
     action_target_arg = action_parts[1].strip() if len(action_parts) > 1 else None
+    
     if action_key in funmodule.ACTIONS:
+        has_reply = bool(update.message.reply_to_message)
+        has_valid_arg = bool(action_target_arg) and (action_target_arg.startswith("@") or action_target_arg.isdigit())
+
+        # Если написали лишний текст (не тег и не ID) — игнорируем
+        if action_target_arg and not has_valid_arg:
+            return
+
+        # Если нет ни реплая, ни тега/ID — игнорируем
+        if not (has_reply or has_valid_arg):
+            return
+
         min_rank = db_get_command_rank("действие")
         if not is_creator and current_rank < min_rank:
             await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
+            
         resolved = await resolve_target_user(update, context, action_target_arg)
         if resolved is None:
             await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username/ID.")
             return
+            
         await funmodule.command_action(update, context, action_key, resolved)
         return
 
-    # 11. Команда !исправить ранги — Ранг 6 (жестко). Одноразовая массовая починка бага дефолтного ранга.
+    # 11. Команда !исправить ранги — Ранг 6
     if text.startswith("!исправить ранги"):
         if not is_creator and current_rank < 6:
             await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
@@ -742,48 +722,14 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    # Находим блок с проверками команд в handle_text_command и добавляем туда:
     if text == "!отмазка":
         await funmodule.command_excuse(update, context)
         return
 
-    # Обработка команды !войс / !voic / /войс / /voic
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
         await command_voic(update, context)
         return
-
-# ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
-async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    current_rank = db_get_user_rank(user_id)
-
-    if query.from_user.id != 8049751536 and current_rank < 6:
-        await query.answer(f"⛔ Вы не являетесь создателем ({format_rank(6)}), вам нельзя нажимать эту кнопку!", show_alert=True)
-        return
-
-    data = query.data
-    await query.answer()
-
-    if data.startswith("reset_yes:"):
-        target_id = int(data.split(":")[1])
-        display_name = f"ID: {target_id}"
-        
-        with sqlite3.connect(config.DB_PATH) as conn:
-            cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
-            row = cur.fetchone()
-            if row:
-                display_name = format_user_link(target_id, row[0], row[1])
-
-        db_reset_user_stats(target_id)
-        await query.edit_message_text(
-            text=f"🔄 Статистика пользователя {display_name} была полностью обнулена администратором.",
-            parse_mode=ParseMode.HTML
-        )
-
-    elif data.startswith("reset_no:"):
-        await query.edit_message_text(text="❌ Операция обнуления была отменена.")
-
+    
 async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     m_rows = db_top_by_messages(10)
     w_rows = db_top_by_walks(10)
