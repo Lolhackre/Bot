@@ -747,6 +747,11 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await funmodule.command_excuse(update, context)
         return
 
+    # Обработка команды !войс / !voic / /войс / /voic
+    if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
+        await command_voic(update, context)
+        return
+
 # ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1085,8 +1090,8 @@ async def daily_birthday_check(context: ContextTypes.DEFAULT_TYPE):
                 pass
         except Exception as e:
             print(f"Ошибка при поздравлении с ДР ({uid}): {e}", file=sys.stderr)
+import asyncio
 
-# ====================== КОМАНДА !voic ======================
 async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
         return
@@ -1094,15 +1099,13 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     raw_text = update.message.text or ""
     
-    # Отрезаем "!voic" или "!voic " от начала сообщения
-    if raw_text.lower().startswith("!voic"):
-        text = raw_text[5:].strip()
-    else:
-        text = raw_text.strip()
+    # Автоматически определяем длину команды, чтобы корректно отрезать её от текста
+    first_word = raw_text.split()[0].lower() if raw_text.split() else ""
+    text = raw_text[len(first_word):].strip()
     
     if not text:
         await update.message.reply_text(
-            "✅ Использование:\n<code>!voic Твой текст здесь</code>", 
+            "✅ Использование:\n<code>!войс Твой текст здесь</code>", 
             parse_mode=ParseMode.HTML
         )
         return
@@ -1111,7 +1114,7 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Слишком длинный текст (макс 600 символов).")
         return
 
-    # Ограничение: только создатель или высокие ранги
+    # Ограничение доступа (Создатель или Ранг >= 5)
     if user.id != 8049751536 and db_get_user_rank(user.id) < 5:
         await update.message.reply_text("⛔ У тебя нет доступа к этой команде.")
         return
@@ -1120,25 +1123,22 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tmp_path = None
 
     try:
-        # Импортируем асинхронный клиент, чтобы не блокировать поток бота
-        from fishaudio import FishAudioAsync
+        # Используем обычный FishAudio, который точно есть в библиотеке
+        client = FishAudio(api_key=config.FISH_API_KEY)
         
-        async with FishAudioAsync(api_key=config.FISH_API_KEY) as client:
-            # Вызываем tts.convert асинхронно через await
-            audio = await client.tts.convert(
-                text=text,
-                reference_id=config.HOMELANDER_VOICE_ID,
-            )
+        # Запускаем синхронную генерацию в отдельном потоке, чтобы бот не зависал
+        audio = await asyncio.to_thread(
+            client.tts.convert,
+            text=text,
+            reference_id=config.HOMELANDER_VOICE_ID
+        )
         
-        # Сохраняем во временный файл
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
             save(audio, tmp_file.name)
             tmp_path = tmp_file.name
 
-        # Безопасное отображение имени
         display_name = escape(user.full_name or user.username or "Пользователь")
 
-        # Отправляем голосовое
         with open(tmp_path, 'rb') as voice:
             await context.bot.send_voice(
                 chat_id=update.message.chat_id,
@@ -1148,14 +1148,13 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.HTML
             )
         
-        await status_msg.delete()  # Удаляем сообщение "Генерирую..."
+        await status_msg.delete()
 
     except Exception as e:
         await status_msg.edit_text(f"❌ Ошибка при генерации голоса:\n<code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
         print(f"[VOIC ERROR] {e}")
         
     finally:
-        # Гарантированное удаление временного файла в любых сценариях
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
