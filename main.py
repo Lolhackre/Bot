@@ -158,44 +158,58 @@ async def resolve_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     """
     Определяет целевого пользователя.
     1. Если есть reply_to_message — берёт автора реплая.
-    2. Если передан arg_text (ID или @username) — ищет по нему (сначала локально, затем через Telegram).
-    Возвращает кортеж (user_id, username, full_name) или None.
+    2. Если в сообщении есть текстовый тег (@username) — вытаскивает объект пользователя из Telegram Entities.
+    3. Если передан чистый ID — ищет по ID.
     """
-    # 1. Проверяем реплай (он приоритетнее всего)
+    # 1. Проверяем реплай (самый высокий приоритет)
     if update.message and update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
         if target_user.is_bot:
             return None
         return (target_user.id, target_user.username, target_user.full_name)
 
-    # 2. Если реплая нет, но есть текстовый аргумент (@username или ID)
+    # 2. Если реплая нет, проверяем Entities (как Iris)
+    if update.message and update.message.entities:
+        for entity in update.message.entities:
+            # Если это текстовое упоминание (юзер без тега, но кликабельный)
+            if entity.type == "text_mention" and entity.user:
+                t_user = entity.user
+                if not t_user.is_bot:
+                    return (t_user.id, t_user.username, t_user.full_name)
+            
+            # Если это обычный @mention (@username)
+            if entity.type == "mention" and arg_text and arg_text.startswith("@"):
+                # Попробуем достать объект пользователя, если библиотека его привязала
+                if hasattr(entity, 'user') and entity.user:
+                    t_user = entity.user
+                    if not t_user.is_bot:
+                        return (t_user.id, t_user.username, t_user.full_name)
+
+    # 3. Фолбэк (запасной вариант), если передан аргумент
     if not arg_text:
         return None
 
     arg_text = arg_text.strip()
-    target_id = None
 
-    # Если передан числовой ID
+    # Если передан чистый числовой ID
     if arg_text.isdigit():
         target_id = int(arg_text)
-    # Если передан @username
-    elif arg_text.startswith("@"):
-        username_to_search = arg_text[1:].lower()
-        # Достаём ID из локальной базы данных
-        target_id = db_get_user_id_by_username(username_to_search)
-
-    # Если мы нашли ID (в базе или передали числом), запрашиваем свежие данные у Telegram
-    if target_id:
         try:
             chat = await context.bot.get_chat(target_id)
-            # Собираем full_name
             first = chat.first_name or ""
             last = chat.last_name or ""
             full_name = f"{first} {last}".strip() or chat.title or "Пользователь"
             return (chat.id, chat.username, full_name)
         except Exception:
-            # Если Telegram не ответил, но у нас есть данные в локальной БД, можно подстраховаться:
+            pass
+
+    # Если это @username, но Telegram не привязал entity (редкий случай), ищем локально в БД
+    if arg_text.startswith("@"):
+        username_to_search = arg_text[1:].lower()
+        target_id = db_get_user_id_by_username(username_to_search)
+        if target_id:
             try:
+                import sqlite3
                 with sqlite3.connect(config.DB_PATH) as conn:
                     cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
                     row = cur.fetchone()
