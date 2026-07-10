@@ -698,45 +698,53 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
         return
 
-# 10. Сами действия (обнять, ударить с разбега и т.д.) без знака "!"
+# 10. Сами действия (обнять, укусить ухо и т.д.) без знака "!"
     clean_text = text.strip()
     action_key = None
     action_target_arg = None
 
-    # Сортируем ключи по длине в обратном порядке (чтобы длинные фразы проверялись первыми)
+    # Перебираем ключи, начиная с САМЫХ ДЛИННЫХ фразовых команд
     for key in sorted(funmodule.ACTIONS.keys(), key=len, reverse=True):
-        # Проверяем, начинается ли текст сообщения с этого действия
+        # Строгая проверка: совпадает ли начало строки с ключом из словаря
         if clean_text.lower().startswith(key.lower()):
             action_key = key
-            # Всё, что осталось после ключевой фразы — это аргумент таргета
+            # Берем хвост сообщения, который идет строго ЗА командой
             raw_arg = clean_text[len(key):].strip()
+            # Если там пусто — аргумента нет (значит, это реплай). Если текст есть — это юзер/ID
             action_target_arg = raw_arg if raw_arg else None
             break
 
-    # Если действие распознано в ACTIONS
+    # Если действие найдено
     if action_key:
         has_reply = bool(update.message.reply_to_message)
-        has_valid_arg = bool(action_target_arg) and (action_target_arg.startswith("@") or action_target_arg.isdigit())
+        
+        # Перепроверяем аргумент на валидность только если он РЕАЛЬНО передан
+        has_valid_arg = False
+        if action_target_arg:
+            # Обрезаем возможный мусор, смотрим, начинается ли на @ или состоит из цифр
+            has_valid_arg = action_target_arg.startswith("@") or action_target_arg.isdigit()
 
-        # Если написали лишний текст после действия (и это не тег, и не ID) — игнорируем
+        # Если текст после команды есть, но это не @юзер и не ID — игнорим (защита от флуда)
         if action_target_arg and not has_valid_arg:
             return
 
-        # Если нет ни реплая, ни валидного тега/ID — игнорируем
+        # Если нет ни реплая, ни правильного аргумента — скипаем
         if not (has_reply or has_valid_arg):
             return
 
+        # Проверка рангов
         min_rank = db_get_command_rank("действие")
         if not is_creator and current_rank < min_rank:
             await update.message.reply_text(f"⛔ Недостаточно прав для действий. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
             return
             
+        # Пытаемся определить юзера
         resolved = await resolve_target_user(update, context, action_target_arg)
         if resolved is None:
             await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username/ID.")
             return
             
-        # Передаем найденный action_key (он будет с пробелами, как в словаре)
+        # Запускаем! Отправит правильный emoji и текст
         await funmodule.command_action(update, context, action_key, resolved)
         return
 
