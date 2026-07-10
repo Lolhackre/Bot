@@ -910,11 +910,8 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE) -> bool:
     return True
 
 async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
-    # Если администрация зафорсила опрос раньше, дневной автоматический триггер закрытия (13:00) не должен выполняться
-    global FORCED_ATTENDANCE_ACTIVE
-    if FORCED_ATTENDANCE_ACTIVE:
-        FORCED_ATTENDANCE_ACTIVE = False
-        return
+    # Убираем проверку глобального флага FORCED_ATTENDANCE_ACTIVE здесь, 
+    # так как отмена/форс теперь полностью контролируются на этапе создания опроса в 20:00.
 
     job_data = context.job.data
     target_chat_id = job_data["chat_id"]
@@ -922,37 +919,58 @@ async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
     place_poll_id = job_data["poll_id"]
 
     try:
+        # 1. Сразу пробуем открепить старый опрос
         try:
             await context.bot.unpin_chat_message(chat_id=target_chat_id, message_id=place_poll_msg_id)
         except Exception:
             pass
 
+        # 2. Останавливаем опрос в Telegram
         stopped_poll = await context.bot.stop_poll(chat_id=target_chat_id, message_id=place_poll_msg_id)
         
-        poll_data = db_get_poll(place_poll_id)
+        # 3. Читаем данные старого опроса из БД в отдельном потоке (асинхронно)
+        poll_data = await asyncio.to_thread(db_get_poll, place_poll_id)
+        if not poll_data:
+            print(f"Ошибка: Не нашли опрос {place_poll_id} в базе данных!", file=sys.stderr)
+            return
+
         options = json.loads(poll_data[3])
         not_walking_idx = poll_data[4]
 
-        max_votes = -1
-        winning_place = "Не определено"
+        max_votes = 0  # Считаем от 0, чтобы ловить варианты, где есть реальные голоса
+        winning_place = "Никто не проголосовал 🤷‍♂️"
+        has_votes = False
 
+        # 4. Считаем результаты
         for option in stopped_poll.options:
             try:
                 idx = options.index(option.text)
             except ValueError:
                 continue
+            
+            # Пропускаем вариант "Не гуляю"
             if idx == not_walking_idx:
                 continue
+                
+            if option.voter_count > 0:
+                has_votes = True
+                
             if option.voter_count > max_votes:
                 max_votes = option.voter_count
                 winning_place = option.text
+        
+        # Если голоса были, но вышло равенство при 0 результатов (никто не выбрал места кроме "Не гуляю")
+        if not has_votes:
+            winning_place = "Никто не выбрал место 🤷‍♂️"
 
+        # 5. Публикуем итоги
         await context.bot.send_message(
             chat_id=target_chat_id,
             text=f"🎰 Итоги голосования! Выбрано место: <b>{winning_place}</b>. Запускаю опрос посещаемости...",
             parse_mode=ParseMode.HTML
         )
         
+        # 6. Отправляем новый опрос на посещаемость
         attendance_options = ["Да, гуляю", "Нет, не гуляю", "Еще подумаю"]
         attendance_msg = await context.bot.send_poll(
             chat_id=target_chat_id,
@@ -963,12 +981,15 @@ async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
             protect_content=True
         )
         
+        # 7. Закрепляем новый опрос
         try:
             await context.bot.pin_chat_message(chat_id=target_chat_id, message_id=attendance_msg.message_id)
         except Exception:
             pass
             
-        db_save_poll(
+        # 8. Записываем новый опрос в БД в отдельном потоке (асинхронно)
+        await asyncio.to_thread(
+            db_save_poll,
             poll_id=attendance_msg.poll.id,
             poll_type="attendance",
             message_id=attendance_msg.message_id,
@@ -978,7 +999,7 @@ async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print(f"Ошибка при обработке цепочки опросов в 13:00: {e}", file=sys.stderr)
-
+        
 # ---------- Обработка голосов ----------
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
@@ -1222,8 +1243,8 @@ async def poll_job_wrapper(ctx):
     if not poll_created:
         return
         
-    # Если мы дошли до сюда, значит опрос создался. Планируем закрытие на завтра в 13:00.
     # Считаем время корректно, защищаясь от багов с переходом на летнее/зимнее время
+    # Если мы дошли до сюда, значит опрос создался. Планируем закрытие на завтра в 13:00.
     now = datetime.now(config.KYIV_TZ)
     tomorrow = now + timedelta(days=1)
     tomorrow_13 = datetime(
