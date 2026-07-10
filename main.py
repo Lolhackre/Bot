@@ -144,8 +144,8 @@ def parse_birthday(date_part: str):
         return None
     return f"{day:02d}.{month:02d}"
 
-def format_silent_ping(user_id):
-    return f'<a href="tg://user?id={user_id}">&#8288;</a>'
+def format_silent_ping(username):
+    return f'<a href="t.me/{username}">&#8288;</a>'
 
 def format_rank(rank, is_creator=False):
     """Возвращает читаемое название ранга, например 'Заместитель (5)'"""
@@ -854,10 +854,15 @@ async def show_my_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 # ---------- Цепочка автоматических опросов ----------
-async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE):
+async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Отправляет ежедневный опрос.
+    Возвращает True, если опрос успешно создан и записан в БД.
+    Возвращает False, если опрос был отменен администрацией.
+    """
     global CANCELLED_POLL_REASON, FORCED_ATTENDANCE_ACTIVE
     
-    # Если зафорсили опрос или отменили его, плановый опрос мест (20:00) скипается
+    # Если опрос отменили или зафорсили заранее — скипаем создание стандартного опроса
     if FORCED_ATTENDANCE_ACTIVE or CANCELLED_POLL_REASON is not None:
         if CANCELLED_POLL_REASON is not None:
             await context.bot.send_message(
@@ -865,10 +870,14 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE):
                 text=f"📢 Напоминание: плановый опрос мест на сегодня отменен.\n📍 <b>Место прогулки определено заранее администрацией:</b> {escape(CANCELLED_POLL_REASON)}",
                 parse_mode=ParseMode.HTML
             )
+        # Сбрасываем флаги для следующего дня
         CANCELLED_POLL_REASON = None
-        FORCED_ATTENDANCE_ACTIVE = False # Сбрасываем флаг для следующего дня
-        return
+        FORCED_ATTENDANCE_ACTIVE = False 
+        
+        # ВАЖНО: возвращаем False, чтобы планировщик знал, что нового опроса НЕТ
+        return False
 
+    # Создаём опрос в телеграме
     message = await context.bot.send_poll(
         chat_id=config.MAIN_GROUP_CHAT_ID,
         question="🌆 Где завтра гуляем?",
@@ -877,8 +886,12 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE):
         allows_multiple_answers=True,
         protect_content=True
     )
+    
     not_walking_idx = config.POLL_OPTIONS.index("Не гуляю")
-    db_save_poll(
+    
+    # Безопасно для асинхронности (в отдельном потоке) пишем в базу
+    await asyncio.to_thread(
+        db_save_poll,
         poll_id=message.poll.id,
         poll_type="place",
         message_id=message.message_id,
@@ -887,10 +900,14 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE):
         not_walking_index=not_walking_idx
     )
     
+    # Пробуем закрепить сообщение
     try:
         await context.bot.pin_chat_message(chat_id=config.MAIN_GROUP_CHAT_ID, message_id=message.message_id)
     except Exception as e:
         print(f"Ошибка закрепления в 20:00: {e}", file=sys.stderr)
+        
+    # Возвращаем True — опрос успешно создан, его нужно будет закрыть завтра
+    return True
 
 async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
     # Если администрация зафорсила опрос раньше, дневной автоматический триггер закрытия (13:00) не должен выполняться
@@ -1053,19 +1070,8 @@ async def daily_activity_check(context: ContextTypes.DEFAULT_TYPE):
     users = db_get_all_users()
     
     for uid, username, full_name, days_inactive in users:
-        if days_inactive >= config.MAX_INACTIVE_DAYS:
-            try:
-                await context.bot.ban_chat_member(chat_id=config.MAIN_GROUP_CHAT_ID, user_id=uid)
-                await context.bot.unban_chat_member(chat_id=config.MAIN_GROUP_CHAT_ID, user_id=uid)
-                await context.bot.send_message(
-                    chat_id=config.MAIN_GROUP_CHAT_ID,
-                    text=f"❌ {format_user_link(uid, username, full_name)} был исключен за неактивность в течение {config.MAX_INACTIVE_DAYS} дней.",
-                    parse_mode=ParseMode.HTML
-                )
-            except Exception:
-                pass
-        elif days_inactive > 0 and days_inactive % config.PING_INTERVAL_DAYS == 0:
-            silent_mention = format_silent_ping(uid)
+        if days_inactive > 0 and days_inactive % config.PING_INTERVAL_DAYS == 0:
+            silent_mention = format_user_link(uid, username, full_name)
             display_name = escape(full_name or username or str(uid))
             await context.bot.send_message(
                 chat_id=config.MAIN_GROUP_CHAT_ID,
@@ -1198,6 +1204,46 @@ async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         not_walking_index=not_walking_idx
     )
 
+
+
+async def db_get_last_poll():
+    """Выносим синхронный SQL в отдельный поток, чтобы не фризить бота"""
+    with sqlite3.connect(config.DB_PATH) as conn:
+        cur = conn.execute(
+            "SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1"
+        )
+        return cur.fetchone()
+
+async def poll_job_wrapper(ctx):
+    # Запускаем отправку опроса и сохраняем результат (True или False)
+    poll_created = await send_daily_poll(ctx)
+    
+    # Если send_daily_poll вернула False (был скип), то ничего на завтра не планируем
+    if not poll_created:
+        return
+        
+    # Если мы дошли до сюда, значит опрос создался. Планируем закрытие на завтра в 13:00.
+    # Считаем время корректно, защищаясь от багов с переходом на летнее/зимнее время
+    now = datetime.now(config.KYIV_TZ)
+    tomorrow = now + timedelta(days=1)
+    tomorrow_13 = datetime(
+        tomorrow.year, tomorrow.month, tomorrow.day, 13, 0, 0
+    ).astimezone(config.KYIV_TZ)
+    
+    # Берем ID только что созданного опроса из базы (в отдельном потоке)
+    row = await asyncio.to_thread(db_get_last_poll)
+        
+    if row:
+        ctx.job_queue.run_once(
+            close_place_and_start_attendance,
+            when=tomorrow_13,
+            data={"poll_id": row[0], "message_id": row[1], "chat_id": config.MAIN_GROUP_CHAT_ID}
+        )
+    else:
+        print("Ошибка: Опрос был создан, но не найден в БД для планирования закрытия!", file=sys.stderr)
+# Регистрация ежедневной таски (тут всё ок)
+
+
 # ---------- Главная функция инициализации ----------
 def main():
     db_init()
@@ -1219,22 +1265,7 @@ def main():
 
     jq = app.job_queue
     
-    async def poll_job_wrapper(ctx):
-        await send_daily_poll(ctx)
-        
-        now = datetime.now(config.KYIV_TZ)
-        tomorrow_13 = (now + timedelta(days=1)).replace(hour=13, minute=0, second=0, microsecond=0)
-        
-        with sqlite3.connect(config.DB_PATH) as conn:
-            cur = conn.execute("SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1")
-            row = cur.fetchone()
-            
-        if row:
-            ctx.job_queue.run_once(
-                close_place_and_start_attendance,
-                when=tomorrow_13,
-                data={"poll_id": row[0], "message_id": row[1], "chat_id": config.MAIN_GROUP_CHAT_ID}
-            )
+
 
     jq.run_daily(poll_job_wrapper, time=dtime(hour=20, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(daily_activity_check, time=dtime(hour=4, minute=0, tzinfo=config.KYIV_TZ))
