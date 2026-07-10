@@ -166,7 +166,7 @@ async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, act
     
     # Если у пользователя нет юзернейма и это не реплай, mention_html по id сделает ссылку tg://user?id=...
     # Для этого передаем имя внутрь. Если в _format_user_link была другая логика — верни её обратно.
-    target_link = f'<a href="tg://user?id={target_id}">{escape(t_name)}</a>' if not target_username else f'<a href="https://t.me/{target_username}">{escape(t_name)}</a>'
+    target_link = _format_user_link(user_id=target_id, username=target_username, full_name=target_full_name)
 
     # 3. Формируем финальный текст через тернарный оператор
     is_self = target_id == actor.id

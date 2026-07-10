@@ -698,20 +698,31 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
         return
 
-    # 10. Сами действия (!обнять, !ударить и т.д.) — с жёсткой валидацией аргументов
-    action_parts = text[1:].split(maxsplit=1) if text.startswith("!") else [text]
-    action_key = action_parts[0] if action_parts else ""
-    action_target_arg = action_parts[1].strip() if len(action_parts) > 1 else None
-    
-    if action_key in funmodule.ACTIONS:
+# 10. Сами действия (обнять, ударить с разбега и т.д.) без знака "!"
+    clean_text = text.strip()
+    action_key = None
+    action_target_arg = None
+
+    # Сортируем ключи по длине в обратном порядке (чтобы длинные фразы проверялись первыми)
+    for key in sorted(funmodule.ACTIONS.keys(), key=len, reverse=True):
+        # Проверяем, начинается ли текст сообщения с этого действия
+        if clean_text.lower().startswith(key.lower()):
+            action_key = key
+            # Всё, что осталось после ключевой фразы — это аргумент таргета
+            raw_arg = clean_text[len(key):].strip()
+            action_target_arg = raw_arg if raw_arg else None
+            break
+
+    # Если действие распознано в ACTIONS
+    if action_key:
         has_reply = bool(update.message.reply_to_message)
         has_valid_arg = bool(action_target_arg) and (action_target_arg.startswith("@") or action_target_arg.isdigit())
 
-        # Если написали лишний текст (не тег и не ID) — игнорируем
+        # Если написали лишний текст после действия (и это не тег, и не ID) — игнорируем
         if action_target_arg and not has_valid_arg:
             return
 
-        # Если нет ни реплая, ни тега/ID — игнорируем
+        # Если нет ни реплая, ни валидного тега/ID — игнорируем
         if not (has_reply or has_valid_arg):
             return
 
@@ -725,6 +736,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("⚠️ Не удалось определить, к кому применить действие. Ответьте на сообщение или укажите @username/ID.")
             return
             
+        # Передаем найденный action_key (он будет с пробелами, как в словаре)
         await funmodule.command_action(update, context, action_key, resolved)
         return
 
@@ -999,7 +1011,7 @@ async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print(f"Ошибка при обработке цепочки опросов в 13:00: {e}", file=sys.stderr)
-        
+
 # ---------- Обработка голосов ----------
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
