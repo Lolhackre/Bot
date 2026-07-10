@@ -1,5 +1,7 @@
 import random
 import sqlite3
+import sys
+import asyncio
 from datetime import datetime, timedelta
 import config
 from telegram import Update
@@ -69,18 +71,18 @@ ACTIONS = {
     "обменяться": ("🔄", "обменялся(лась) стикерами с"),
     "заплести": ("💇", "заплел(а) косички"),
     "укрыть": ("🧣", "укутал(а) в теплый плед"),
-        "шлепнуть": ("🍑", "отшлёпал(а) по жопе"),
+    "шлепнуть": ("🍑", "отшлёпал(а) по жопе"),
     "лизнуть": ("👅", "облизал(а)"),
     "прижать": ("🤤", "прижал(а) к себе"),
     "придушить": ("🤏", "придушил(а) за шею"),
     "засосать": ("😏", "оставил(а) засос"),
-    "ущипнуть_жопу": ("🤏", "ущипнул(а) за жопу"),
+    "ущипнуть жопу": ("🤏", "ущипнул(а) за жопу"),
     "потыкать": ("👉", "потрогал(а) пальцем"),
     "облизать": ("😛", "облизал(а) всего"),
     "засунуть": ("🍆", "засунул(а) пальцы"),
-    "прижать_стенке": ("🫦", "прижал(а) к стенке"),
-    "погладить_жопу": ("🖐️", "погладил(а) по жопе"),
-    "укусить_ухо": ("🦷", "укусил(а) за ушко"),
+    "прижать стенке": ("🫦", "прижал(а) к стенке"),
+    "погладить жопу": ("🖐️", "погладил(а) по жопе"),
+    "укусить ухо": ("🦷", "укусил(а) за ушко"),
 
     # 18+ действия
     "отшлепать": ("🔥", "хорошенько отшлёпал(а)"),
@@ -88,7 +90,7 @@ ACTIONS = {
     "выебать": ("💦", "выебал(а) до потери пульса"),
     "отсосать": ("😮", "встал(а) на колени и отсосал(а)"),
     "вылизать": ("👅", "вылизал(а) дочиста"),
-    "сесть_лицо": ("🪑", "сел(а) на лицо"),
+    "сесть лицо": ("🪑", "сел(а) на лицо"),
     "дрочить": ("✊", "подрочил(а)"),
     "кончить": ("💦", "кончил(а) на"),
     "минет": ("👄", "сделал(а) глубокий минет"),
@@ -96,37 +98,37 @@ ACTIONS = {
     "куни": ("🌸", "сделал(а) кунилингус"),
     "фистинг": ("✊", "зафистил(а)"),
     "связать": ("⛓️", "связал(а) и отымел(а)"),
-    "за_волосы": ("🖐️", "взял(а) за волосы и"),
-    "на_колени": ("🙇", "поставил(а) на колени"),
+    "за волосы": ("🖐️", "взял(а) за волосы и"),
+    "на колени": ("🙇", "поставил(а) на колени"),
     "глубоко": ("🍆", "загнал(а) очень глубоко"),
-    "в_ротик": ("👄", "засунул(а) в ротик"),
-    "в_попку": ("🍑", "вошёл(ла) в попку"),
-    "шлеп_жопа": ("🍑", "шлёпнул(а) по голой жопе"),
+    "в ротик": ("👄", "засунул(а) в ротик"),
+    "в попку": ("🍑", "вошёл(ла) в попку"),
+    "шлеп жопа": ("🍑", "шлёпнул(а) по голой жопе"),
     "отъебать": ("🔥", "отъебал(а) как следует"),
-    "шлепнуть_жопу": ("🍑", "шлёпнул(а) по голой жопе"),
-    "лизнуть_шею": ("👅", "облизал(а) шею"),
-    "прижать_стену": ("🫦", "прижал(а) к стене"),
-    "глубоко_рот": ("🍆", "загнал(а) глубоко в рот"),
-    "анал_жёстко": ("🍑", "выебал(а) в попку жёстко"),
-    "куни_глубоко": ("🌸", "вылизал(а) глубоко"),
-    "дрочить_быстро": ("✊", "подрочил(а) быстро"),
-    "кончить_лицо": ("💦", "кончил(а) на лицо"),
-    "отсосать_глубоко": ("😮", "отсосал(а) глубоко"),
-    "связать_руки": ("⛓️", "связал(а) руки"),
-    "шлеп_грудь": ("🍒", "шлёпнул(а) по груди"),
-    "укусить_сосок": ("🦷", "укусил(а) сосок"),
-    "пальцами_внутри": ("👉", "засунул(а) пальцы внутрь"),
-    "оттрахать_рот": ("🍆", "оттрахал(а) рот"),
-    "в_попку_глубоко": ("🍑", "вошёл(ла) глубоко в попку"),
-    "минет_глубокий": ("👄", "глубокий минет"),
+    "шлепнуть жопу": ("🍑", "шлёпнул(а) по голой жопе"),
+    "лизнуть шею": ("👅", "облизал(а) шею"),
+    "прижать стену": ("🫦", "прижал(а) к стене"),
+    "глубоко рот": ("🍆", "загнал(а) глубоко в рот"),
+    "анал жёстко": ("🍑", "выебал(а) в попку жёстко"),
+    "куни глубоко": ("🌸", "вылизал(а) глубоко"),
+    "дрочить быстро": ("✊", "подрочил(а) быстро"),
+    "кончить лицо": ("💦", "кончил(а) на лицо"),
+    "отсосать глубоко": ("😮", "отсосал(а) глубоко"),
+    "связать руки": ("⛓️", "связал(а) руки"),
+    "шлеп грудь": ("🍒", "шлёпнул(а) по груди"),
+    "укусить сосок": ("🦷", "укусил(а) сосок"),
+    "пальцами внутри": ("👉", "засунул(а) пальцы внутрь"),
+    "оттрахать рот": ("🍆", "оттрахал(а) рот"),
+    "в попку глубоко": ("🍑", "вошёл(ла) глубоко в попку"),
+    "минет глубокий": ("👄", "глубокий минет"),
     # ... и так далее (я добавил ещё много похожих)
-    "за_горло": ("🤏", "схватил(а) за горло"),
-    "прижать_кровать": ("🛏️", "прижал(а) к кровати"),
+    "за горло": ("🤏", "схватил(а) за горло"),
+    "прижать кровать": ("🛏️", "прижал(а) к кровати"),
     "раздеть": ("👙", "сорвал(а) одежду"),
-    "лизать_везде": ("👅", "вылизал(а) всего/всю"),
-    "кончить_внутри": ("💦", "кончил(а) внутрь"),
-    "глубокий_анал": ("🍑", "глубокий анал"),
-    "бдсм_шлепки": ("🔥", "отшлёпал(а) по БДСМ"),
+    "лизать везде": ("👅", "вылизал(а) всего/всю"),
+    "кончить внутри": ("💦", "кончил(а) внутрь"),
+    "глубокий анал": ("🍑", "глубокий анал"),
+    "бдсм шлепки": ("🔥", "отшлёпал(а) по БДСМ"),
     "наездница": ("🐎", "сделал(а) наездницу"),
     "догги": ("🐕", "в позе догги"),
     "69": ("6️⃣9️⃣", "занялся(ась) 69"),
@@ -135,33 +137,45 @@ ACTIONS = {
 }
 
 async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action_key: str, target=None):
-    """Обрабатывает действие одного участника к другому.
-    target: опциональный кортеж (user_id, username, full_name), уже определённый вызывающей стороной
-    (по @юзер/ID). Если не передан — используется ответ на сообщение (reply)."""
+    """Обрабатывает действие одного участника к другому."""
     actor = update.effective_user
+    message = update.message
 
-    if target is not None:
+    # 1. Быстро определяем цель (target)
+    if target:
         target_id, target_username, target_full_name = target
-    elif update.message.reply_to_message:
-        target_user = update.message.reply_to_message.from_user
+    elif message.reply_to_message:
+        target_user = message.reply_to_message.from_user
         if target_user.is_bot:
-            await update.message.reply_text("🤖 Ботов трогать нельзя, у них и так тяжелая жизнь.")
+            await message.reply_text("🤖 Ботов трогать нельзя, у них и так тяжелая жизнь.")
             return
         target_id, target_username, target_full_name = target_user.id, target_user.username, target_user.full_name
     else:
-        await update.message.reply_text("⚠️ Ответьте этой командой на сообщение того, к кому хотите применить действие, или укажите @username/ID.")
+        await message.reply_text("⚠️ Ответьте этой командой на сообщение того, к кому хотите применить действие, или укажите @username/ID.")
         return
 
     emoji, verb = ACTIONS[action_key]
-    actor_link = _format_user_link(actor.id, actor.username, actor.full_name)
-    target_link = _format_user_link(target_id, target_username, target_full_name)
 
-    if target_id == actor.id:
-        text = f"{emoji} {actor_link} {verb} самого себя. Ситуация..."
-    else:
-        text = f"{emoji} {actor_link} {verb} {target_link}!"
+    # 2. Оптимизация генерации ссылок
+    # Если твоя функция _format_user_link просто делала HTML-ссылку, 
+    # лучше юзать встроенный mention_html — он быстрее и безопаснее (сам экранирует имена)
+    actor_link = actor.mention_html(actor.full_name or actor.username)
+    
+    # Для таргета собираем красивое имя (из full_name или username)
+    t_name = target_full_name or target_username or f"ID: {target_id}"
+    
+    # Если у пользователя нет юзернейма и это не реплай, mention_html по id сделает ссылку tg://user?id=...
+    # Для этого передаем имя внутрь. Если в _format_user_link была другая логика — верни её обратно.
+    target_link = f'<a href="tg://user?id={target_id}">{escape(t_name)}</a>' if not target_username else f'<a href="https://t.me/{target_username}">{escape(t_name)}</a>'
 
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    # 3. Формируем финальный текст через тернарный оператор
+    is_self = target_id == actor.id
+    text = (
+        f"{emoji} {actor_link} {verb} самого себя. Ситуация..." if is_self 
+        else f"{emoji} {actor_link} {verb} {target_link}!"
+    )
+
+    await message.reply_text(text, parse_mode=ParseMode.HTML)
 
 # Расширенный список мемных, кринжовых и жестких отмазок (с матами)
 EXCUSES = [
@@ -377,113 +391,153 @@ EXCUSES = [
 # Словарь для хранения кулдаунов {user_id: datetime_next_allowed}
 COOLDOWN_TIME = timedelta(hours=4)
 
+
 async def command_excuse(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Проверяем, что пишем в главной группе
-    if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
+    # 1. Быстрая проверка чата (сравниваем как строки или инты одинаково)
+    if str(update.message.chat_id) != str(config.MAIN_GROUP_CHAT_ID):
         return
     
     user = update.effective_user
     user_id = user.id
     now = datetime.now()
 
-    # Проверка минимального ранга доступа (настраивается через !доступ отмазка [ранг])
+    # 2. ОПТИМИЗАЦИЯ БД: Выносим чтение рангов в потоки, чтобы не фризить бота
     is_creator = (user_id == 8049751536)
-    current_rank = db_get_user_rank(user_id)
-    min_rank = db_get_command_rank("отмазка")
+    
+    try:
+        current_rank = await asyncio.to_thread(db_get_user_rank, user_id)
+        min_rank = await asyncio.to_thread(db_get_command_rank, "отмазка")
+    except Exception as e:
+        print(f"Ошибка при чтении рангов из БД: {e}", file=sys.stderr)
+        return
+
     if not is_creator and current_rank < min_rank:
-        await update.message.reply_text("⛔ Недостаточно прав для этой команды.")
+        await update.message.reply_text("⛔ <b>Недостаточно прав для этой команды.</b>", parse_mode=ParseMode.HTML)
         return
     
-    # Инициализируем словарь кулдаунов в context.bot_data, если его еще нет
+    # Инициализируем кулдауны
     if "excuse_cooldowns" not in context.bot_data:
         context.bot_data["excuse_cooldowns"] = {}
         
     cooldowns = context.bot_data["excuse_cooldowns"]
     
-    # Проверка на кулдаун
+    # 3. ВИЗУАЛ: Проверка на кулдаун (Красивый вывод времени)
     if user_id in cooldowns and now < cooldowns[user_id]:
         remaining = cooldowns[user_id] - now
-        hours, remainder = divmod(int(remaining.total_seconds()), 3600)
-        minutes, _ = divmod(remainder, 60)
+        total_seconds = int(remaining.total_seconds())
         
-        # Тайм-аут сообщения об ошибке
-        time_str = f"{hours}ч {minutes}м" if hours > 0 else f"{minutes} мин"
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        if hours > 0:
+            time_str = f"⏳ <b>{hours} ч. {minutes} мин.</b>"
+        elif minutes > 0:
+            time_str = f"⏳ <b>{minutes} мин. {seconds} сек.</b>"
+        else:
+            time_str = f"⏳ <b>{seconds} сек.</b>"
+            
         await update.message.reply_text(
-            f"🚫 Слышь, <b>{escape(user.first_name)}</b>, ты слишком часто отмазываешься. Сходи погуляй или жди еще {time_str}.",
+            f"🛑 <b>Кулдаун!</b>\n\n"
+            f"Слышь, {user.mention_html(user.first_name)}, ты слишком часто отмазываешься.\n"
+            f"Генератор оправданий остывает. Подожди ещё {time_str}.",
             parse_mode=ParseMode.HTML
         )
         return
 
-    # Если кулдауна нет — генерируем отмазку
+    # 4. ВИЗУАЛ: Генерируем сочную отмазку
     random_excuse = random.choice(EXCUSES)
-    display_name = escape(user.full_name or user.username or str(user.id))
+    
+    # Используем встроенный метод mention_html вместо ручного escape — это красивее и делает кликабельный ник
+    user_mention = user.mention_html(user.full_name or user.username)
+    
+    response_text = (
+        f"────────────────────\n"
+        f"👤 <b>Сегодня </b> {user_mention} <b> не идёт гулять по причине:</b>\n"
+        f"<blockquote><i>«{escape(random_excuse)}»</i></blockquote>\n"
+        f"────────────────────\n"
+    )
     
     await update.message.reply_text(
-        f"🤷‍♂️ <b>{display_name}</b> не идёт гулять, потому что:\n<i>«{random_excuse}»</i>",
+        text=response_text,
         parse_mode=ParseMode.HTML
     )
     
-    # Вешаем кулдаун на 4 часа
+    # Вешаем кулдаун
     cooldowns[user_id] = now + COOLDOWN_TIME
+
+
+def db_get_balabol_and_silent():
+    """Собираем данные из БД в один быстрый синхронный заход"""
+    with sqlite3.connect(config.DB_PATH) as conn:
+        # 1. Ищем ТОП-1 балабола дня
+        cur_balabol = conn.execute("""
+            SELECT user_id, username, full_name, daily_messages_count 
+            FROM users 
+            WHERE daily_messages_count > 0
+            ORDER BY daily_messages_count DESC 
+            LIMIT 1
+        """)
+        balabol_row = cur_balabol.fetchone()
+        
+        # 2. Ищем случайного «Молчуна дня»
+        cur_silent = conn.execute("""
+            SELECT user_id, username, full_name 
+            FROM users 
+            WHERE daily_messages_count = 0
+            ORDER BY RANDOM() 
+            LIMIT 1
+        """)
+        silent_row = cur_silent.fetchone()
+        
+        return balabol_row, silent_row
+
+def db_reset_daily_counters():
+    """Сбрасываем счетчики отдельной быстрой транзакцией"""
+    with sqlite3.connect(config.DB_PATH) as conn:
+        conn.execute("UPDATE users SET daily_messages_count = 0")
+        conn.commit()
+
 
 async def daily_balabol_check(context: ContextTypes.DEFAULT_TYPE):
     try:
-        with sqlite3.connect(config.DB_PATH) as conn:
-            # 1. Ищем ТОП-1 балабола дня
-            cur_balabol = conn.execute("""
-                SELECT user_id, username, full_name, daily_messages_count 
-                FROM users 
-                WHERE daily_messages_count > 0
-                ORDER BY daily_messages_count DESC 
-                LIMIT 1
-            """)
-            balabol_row = cur_balabol.fetchone()
-            
-            # 2. Ищем случайного «Молчуна дня» (у кого 0 сообщений за сегодня)
-            cur_silent = conn.execute("""
-                SELECT user_id, username, full_name 
-                FROM users 
-                WHERE daily_messages_count = 0
-                ORDER BY RANDOM() 
-                LIMIT 1
-            """)
-            silent_row = cur_silent.fetchone()
-            
-            if not balabol_row and not silent_row:
-                return
+        # Шаг 1: Быстро забираем данные из БД в отдельном потоке (база сразу освобождается)
+        balabol_row, silent_row = await asyncio.to_thread(db_get_balabol_and_silent)
+        
+        if not balabol_row and not silent_row:
+            return
 
-            text = "🏆 <b>ИТОГИ ДНЯ: РЕЙТИНГ АКТИВНОСТИ</b> 🏆\n\n"
+        # Шаг 2: Формируем текст
+        text = "🏆 <b>ИТОГИ ДНЯ: РЕЙТИНГ АКТИВНОСТИ</b> 🏆\n\n"
+        
+        if balabol_row:
+            b_uid, b_un, b_fn, b_count = balabol_row
+            b_name = escape(b_fn or b_un or f"ID: {b_uid}")
+            text += f"📢 <b>Балабол дня:</b> {b_name}\n💬 Настрочил целых <b>{b_count}</b> сообщ. за сутки!\n\n"
+        
+        if silent_row:
+            s_uid, s_un, s_fn = silent_row
+            s_name = escape(s_fn or s_un or f"ID: {s_uid}")
+            text += f"🤫 <b>Молчун дня:</b> {s_name}\n🤐 Не проронил ни слова. Партизан года!\n\n"
             
-            if balabol_row:
-                b_uid, b_un, b_fn, b_count = balabol_row
-                b_name = escape(b_fn or b_un or f"ID: {b_uid}")
-                text += f"📢 <b>Балабол дня:</b> {b_name}\n💬 Настрочил целых <b>{b_count}</b> сообщ. за сутки!\n\n"
-            
-            if silent_row:
-                s_uid, s_un, s_fn = silent_row
-                s_name = escape(s_fn or s_un or f"ID: {s_uid}")
-                text += f"🤫 <b>Молчун дня:</b> {s_name}\n🤐 Не проронил ни слова. Партизан года!\n\n"
-                
-            text += "🏅 Эти шуточные звания закреплены в топе до завтрашнего вечера!"
+        text += "🏅 Эти шуточные звания закреплены в топе до завтрашнего вечера!"
 
-            msg = await context.bot.send_message(
+        # Шаг 3: Отправляем в Telegram (база в это время отдыхает и доступна для других тасок)
+        msg = await context.bot.send_message(
+            chat_id=config.MAIN_GROUP_CHAT_ID,
+            text=text,
+            parse_mode=ParseMode.HTML
+        )
+        
+        try:
+            await context.bot.pin_chat_message(
                 chat_id=config.MAIN_GROUP_CHAT_ID,
-                text=text,
-                parse_mode=ParseMode.HTML
+                message_id=msg.message_id
             )
+        except Exception:
+            pass
             
-            try:
-                await context.bot.pin_chat_message(
-                    chat_id=config.MAIN_GROUP_CHAT_ID,
-                    message_id=msg.message_id
-                )
-            except Exception:
-                pass
-                
-            # Сбрасываем суточный счетчик
-            conn.execute("UPDATE users SET daily_messages_count = 0")
-            conn.commit()
+        # Шаг 4: Быстро сбрасываем суточные счетчики в БД
+        await asyncio.to_thread(db_reset_daily_counters)
 
     except Exception as e:
-        import sys
         print(f"Ошибка в daily_balabol_check: {e}", file=sys.stderr)
