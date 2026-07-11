@@ -528,13 +528,6 @@ async def daily_balabol_check(context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
         
-        try:
-            await context.bot.pin_chat_message(
-                chat_id=config.MAIN_GROUP_CHAT_ID,
-                message_id=msg.message_id
-            )
-        except Exception:
-            pass
             
         # Шаг 4: Быстро сбрасываем суточные счетчики в БД
         await asyncio.to_thread(db_reset_daily_counters)
