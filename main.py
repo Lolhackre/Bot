@@ -322,6 +322,20 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     db_log_message(user.id, user.username, user.full_name, is_command=is_command)
 
+async def _srach_auto_unlock_callback(context: ContextTypes.DEFAULT_TYPE):
+    """Вызывается автоматически таймером по истечении времени 'Стоп Срача'"""
+    context.bot_data["stop_srach_active"] = False
+    
+    # Пытаемся отправить уведомление в чат, где была блокировка
+    job = context.job
+    if job and job.chat_id:
+        await context.bot.send_message(
+            chat_id=job.chat_id,
+            text="📢 <b>ВРЕМЯ ОХЛАЖДЕНИЯ ИСТЕКЛО</b>\n"
+                 "Режим «Стоп Срач» автоматически завершён. Чат снова доступен для всех участников. Общайтесь культурно!",
+            parse_mode=ParseMode.HTML
+        )
+
 async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
         return
@@ -331,6 +345,17 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     current_rank = db_get_user_rank(user_id)
     is_creator = (user_id == 8049751536)
+
+    # === ФИЛЬТР УДАЛЕНИЯ ДЛЯ РЕЖИМА СТОП СРАЧ ===
+    if context.bot_data.get("stop_srach_active") is True:
+        # Если пишет НЕ создатель И ранг пользователя строго МЕНЬШЕ 5
+        if not is_creator and current_rank < 5:
+            try:
+                # Молча удаляем сообщение нарушителя спокойствия
+                await update.message.delete()
+            except Exception:
+                pass
+            return # Наглухо блокируем дальнейшую обработку этого сообщения ботом
 
     # 0a. Команда +ник [новый ник] — кастомный ник в статистике и действиях (пусто = сброс)
     if text.startswith("+ник"):
@@ -475,7 +500,77 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         CANCELLED_POLL_REASON = reason
         await update.message.reply_text(f"🚫 Вечерний опрос отменен администратором.\n📍 <b>Причина:</b> {escape(reason)}", parse_mode=ParseMode.HTML)
         return
+# === КОМАНДА: СТОП СРАЧ ===
+    if text.startswith("!стоп срач"):
+        # Получаем требуемый ранг именно для этой команды
+        min_rank = db_get_command_rank("стоп_срач")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Недостаточно прав. Требуется ранг {format_rank(min_rank)}+. Ваш ранг: {format_rank(current_rank)}")
+            return
 
+        arg = text[10:].strip().lower()
+
+        # Инициализируем структуру в bot_data, если её нет
+        if "stop_srach_active" not in context.bot_data:
+            context.bot_data["stop_srach_active"] = False
+
+        # --- СЦЕНАРИЙ 1: СБРОС РЕЖИМА ---
+        if arg == "сброс":
+            if not context.bot_data["stop_srach_active"]:
+                await update.message.reply_text("⚠️ Режим «Стоп Срач» и так не был активен.")
+                return
+
+            # Выключаем режим и удаляем запланированную таску автовыключения
+            context.bot_data["stop_srach_active"] = False
+            current_jobs = context.job_queue.get_jobs_by_name("auto_disable_srach")
+            for job in current_jobs:
+                job.schedule_removal()
+
+            await update.message.reply_text(
+                "🟢 <b>РЕЖИМ СТОП СРАЧ ЗАВЕРШЕН ДОСРОЧНО!</b>\n"
+                f"Администратор {update.effective_user.mention_html()} открыл чат. Пожалуйста, соблюдайте правила общения.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+
+        # --- СЦЕНАРИЙ 2: АКТИВАЦИЯ РЕЖИМА ---
+        if not arg.isdigit():
+            await update.message.reply_text("⚠️ Использование: <code>!стоп срач [минуты]</code> или <code>!стоп срач сброс</code>.", parse_mode=ParseMode.HTML)
+            return
+
+        minutes = int(arg)
+        if minutes <= 0 or minutes > 1440: # Ограничим сутки максимум
+            await update.message.reply_text("⚠️ Укажите адекватное время в минутах (от 1 до 1440).")
+            return
+
+        # Записываем состояние блокировки
+        context.bot_data["stop_srach_active"] = True
+
+        # Если уже была запланирована старая таска автовыключения — убираем её
+        old_jobs = context.job_queue.get_jobs_by_name("auto_disable_srach")
+        for job in old_jobs:
+            job.schedule_removal()
+
+        # Планируем автоматическое открытие чата через N минут
+        context.job_queue.run_once(
+            _srach_auto_unlock_callback,
+            when=timedelta(minutes=minutes),
+            name="auto_disable_srach",
+            chat_id=update.effective_chat.id
+        )
+
+        # Красивое уведомление в чат
+        await update.message.reply_text(
+            f"🚨 <b>ОБЪЯВЛЕН РЕЖИМ «СТОП СРАЧ»!</b> 🚨\n"
+            f"─────────────────────────\n"
+            f"⏳ Блокировка установлена на: <b>{minutes} мин.</b>\n"
+            f"🚫 <b>Все новые сообщения от обычных участников удаляются автоматически!</b>\n"
+            f"✍️ Писать могут только администраторы рангом <b>5+</b>.\n"
+            f"─────────────────────────\n"
+            f"👮‍♂️ Режим активировал: {update.effective_user.mention_html()}",
+            parse_mode=ParseMode.HTML
+        )
+        return
     # 4. Команда !форс [Место] — Ранг >= 4
     if text.startswith("!форс"):
         min_rank = db_get_command_rank("форс")
@@ -768,6 +863,9 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
         await command_voic(update, context)
         return
+
+
+    
 # ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
