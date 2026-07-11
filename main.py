@@ -16,6 +16,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     filters,
+    ApplicationHandlerStop
 )
 
 import config
@@ -341,6 +342,33 @@ async def _srach_auto_unlock_callback(context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
+async def watch_srach_lock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Хэндлер-надсмотрщик: моментально удаляет любые сообщения во время Стоп Срача"""
+    global SRACH_LOCK_ACTIVE
+    
+    # Если режим тишины не активен, просто выходим и даем коду идти дальше
+    if not SRACH_LOCK_ACTIVE:
+        return
+        
+    user_id = update.effective_user.id
+    current_rank = db_get_user_rank(user_id)
+    is_creator = (user_id == 8049751536)
+    # Если режим АКТИВЕН, проверяем ранг
+    # (Сюда нужно скопировать твою логику получения ранга, например:)
+    # user_id = update.effective_user.id
+    # current_rank = db_get_user_rank(user_id) 
+    # is_creator = (user_id == CREATOR_ID)
+    
+    # ПРИМЕР (подставь свои переменные определения ранга):
+    if not is_creator and current_rank < 5:
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        # Важно: вызываем ApplicationHandlerStop, чтобы другие хэндлеры 
+        # (включая команды) даже не пытались обрабатывать это удаленное сообщение!
+        raise ApplicationHandlerStop()
+
 async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
         return
@@ -351,15 +379,6 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     current_rank = db_get_user_rank(user_id)
     is_creator = (user_id == 8049751536)
 
-# === МОМЕНТАЛЬНОЕ УДАЛЕНИЕ ПРИ СТОП СРАЧЕ ===
-    if SRACH_LOCK_ACTIVE:
-        # Если пишет НЕ создатель И ранг пользователя строго МЕНЬШЕ 5
-        if not is_creator and current_rank < 5:
-            try:
-                await update.message.delete()
-            except Exception:
-                pass  # Если сообщение уже удалено или у бота нет прав администратора
-            return  # Прерываем обработку, бот дальше этот текст не смотрит
 
     # 0a. Команда +ник [новый ник] — кастомный ник в статистике и действиях (пусто = сброс)
     if text.startswith("+ник"):
@@ -1397,7 +1416,17 @@ def main():
     app.add_handler(CommandHandler("voic", command_voic))
 
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.UpdateType.EDITED, handle_private_message))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^[!+]") & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_text_command))
+    # 1. Самый первый хэндлер — проверяет режим «Стоп Срач» для ВСЕХ сообщений
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, watch_srach_lock),
+        group=0
+    )
+
+    # 2. Твой старый хэндлер для команд (теперь он будет спать спокойно во время срача)
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(r"^[!+]") & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_text_command),
+        group=1
+    )
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_group_message), group=1) 
     
     app.add_handler(CallbackQueryHandler(handle_callback_query))
