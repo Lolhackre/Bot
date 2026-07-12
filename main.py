@@ -1470,7 +1470,7 @@ def main():
 
 
     jq.run_daily(poll_job_wrapper, time=dtime(hour=20, minute=0, tzinfo=config.KYIV_TZ))
-    jq.run_daily(daily_activity_check, time=dtime(hour=4, minute=0, tzinfo=config.KYIV_TZ))
+    jq.run_daily(daily_activity_check, time=dtime(hour=10, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(daily_birthday_check, time=dtime(hour=9, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(funmodule.daily_balabol_check, time=dtime(hour=22, minute=00, tzinfo=config.KYIV_TZ))
     print("Бот успешно запущен.")
