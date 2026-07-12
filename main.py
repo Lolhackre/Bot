@@ -1003,49 +1003,60 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE) -> bool:
     # Если опрос отменили или зафорсили заранее — скипаем создание стандартного опроса
     if FORCED_ATTENDANCE_ACTIVE or CANCELLED_POLL_REASON is not None:
         if CANCELLED_POLL_REASON is not None:
-            await context.bot.send_message(
-                chat_id=config.MAIN_GROUP_CHAT_ID,
-                text=f"📢 Напоминание: плановый опрос мест на сегодня отменен.\n📍 <b>Место прогулки определено заранее администрацией:</b> {escape(CANCELLED_POLL_REASON)}",
-                parse_mode=ParseMode.HTML
-            )
+            try:
+                await context.bot.send_message(
+                    chat_id=config.MAIN_GROUP_CHAT_ID,
+                    text=f"📢 Напоминание: плановый опрос мест на сегодня отменен.\n📍 <b>Место прогулки определено заранее администрацией:</b> {escape(CANCELLED_POLL_REASON)}",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                print(f"Ошибка отправки отмены опроса: {e}", file=sys.stderr)
+                
         # Сбрасываем флаги для следующего дня
         CANCELLED_POLL_REASON = None
         FORCED_ATTENDANCE_ACTIVE = False 
-        
-        # ВАЖНО: возвращаем False, чтобы планировщик знал, что нового опроса НЕТ
         return False
 
-    # Создаём опрос в телеграме
-    message = await context.bot.send_poll(
-        chat_id=config.MAIN_GROUP_CHAT_ID,
-        question="🌆 Где завтра гуляем?",
-        options=config.POLL_OPTIONS,
-        is_anonymous=False,
-        allows_multiple_answers=True,
-        protect_content=True
-    )
-    
-    not_walking_idx = config.POLL_OPTIONS.index("Не гуляю")
-    
-    # Безопасно для асинхронности (в отдельном потоке) пишем в базу
-    await asyncio.to_thread(
-        db_save_poll,
-        poll_id=message.poll.id,
-        poll_type="place",
-        message_id=message.message_id,
-        chat_id=str(config.MAIN_GROUP_CHAT_ID),
-        options_json=json.dumps(config.POLL_OPTIONS),
-        not_walking_index=not_walking_idx
-    )
-    
-    # Пробуем закрепить сообщение
     try:
-        await context.bot.pin_chat_message(chat_id=config.MAIN_GROUP_CHAT_ID, message_id=message.message_id)
-    except Exception as e:
-        print(f"Ошибка закрепления в 20:00: {e}", file=sys.stderr)
+        # Создаём опрос в телеграме
+        message = await context.bot.send_poll(
+            chat_id=config.MAIN_GROUP_CHAT_ID,
+            question="🌆 Где завтра гуляем?",
+            options=config.POLL_OPTIONS,
+            is_anonymous=False,
+            allows_multiple_answers=True,
+            protect_content=True
+        )
         
-    # Возвращаем True — опрос успешно создан, его нужно будет закрыть завтра
-    return True
+        # БЕЗОПАСНЫЙ ПОИСК ИНДЕКСА: если "Не гуляю" нет в списке, ставим -1, чтобы не падать
+        try:
+            not_walking_idx = config.POLL_OPTIONS.index("Не гуляю")
+        except ValueError:
+            not_walking_idx = -1  # Дефолтное значение, если элемент не найден
+        
+        # Запись в базу данных
+        await asyncio.to_thread(
+            db_save_poll,
+            poll_id=message.poll.id,
+            poll_type="place",
+            message_id=message.message_id,
+            chat_id=str(config.MAIN_GROUP_CHAT_ID),
+            options_json=json.dumps(config.POLL_OPTIONS),
+            not_walking_index=not_walking_idx
+        )
+        
+        # Пробуем закрепить сообщение
+        try:
+            await context.bot.pin_chat_message(chat_id=config.MAIN_GROUP_CHAT_ID, message_id=message.message_id)
+        except Exception as e:
+            print(f"Ошибка закрепления в 20:00: {e}", file=sys.stderr)
+            
+        return True
+
+    except Exception as fatal_e:
+        # Ловим любые критические ошибки (например, если чат не найден), чтобы таска не падала молча
+        print(f"🚨 Критическая ошибка в send_daily_poll: {fatal_e}", file=sys.stderr)
+        return False
 
 async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
     # Убираем проверку глобального флага FORCED_ATTENDANCE_ACTIVE здесь, 
@@ -1230,13 +1241,35 @@ async def daily_activity_check(context: ContextTypes.DEFAULT_TYPE):
     
     for uid, username, full_name, days_inactive in users:
         if days_inactive > 0 and days_inactive % config.PING_INTERVAL_DAYS == 0:
+            
+            # === ПРОВЕРКА: НАХОДИТСЯ ЛИ ЮЗЕР В ГРУППЕ ===
+            try:
+                member = await context.bot.get_chat_member(chat_id=config.MAIN_GROUP_CHAT_ID, user_id=uid)
+                # Если статус "left" (вышел) или "kicked" (забанен) — скипаем его
+                if member.status in ["left", "kicked"]:
+                    continue
+            except Exception:
+                # Если Телеграм вернул ошибку (например, юзер вообще удалил аккаунт или бот его не видит) — тоже скипаем
+                continue
+
+            # Если проверка прошла — пингуем
             silent_mention = format_user_link(uid, username, full_name)
             display_name = escape(full_name or username or str(uid))
-            await context.bot.send_message(
-                chat_id=config.MAIN_GROUP_CHAT_ID,
-                text=f"{silent_mention}🔔 Эй, {display_name}, ты молчишь уже {days_inactive} дня(ней)! Напиши хоть точку, чтобы остаться в группе.",
-                parse_mode=ParseMode.HTML
-            )
+            
+            try:
+                await context.bot.send_message(
+                    chat_id=config.MAIN_GROUP_CHAT_ID,
+                    text=f"{silent_mention}🔔 Эй, {display_name}, ты молчишь уже {days_inactive} дня(ней)! Напиши хоть точку, чтобы остаться в группе.",
+                    parse_mode=ParseMode.HTML
+                )
+                # ВАЖНО: Пауза 100 миллисекунд между итерациями, чтобы не словить Flood Control
+                await asyncio.sleep(0.1)
+                
+            except telegram.error.RetryAfter as e:
+                # Если Телеграм всё-таки выдал ограничение скорости, послушно спим сколько просит
+                await asyncio.sleep(e.retry_after)
+            except Exception as e:
+                print(f"Ошибка отправки пинга для {uid}: {e}", file=sys.stderr)
 
 async def daily_birthday_check(context: ContextTypes.DEFAULT_TYPE):
     """Поздравляет всех, у кого сегодня день рождения (проверка по формату ДД.ММ)"""
