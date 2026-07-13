@@ -889,7 +889,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
             return
         await update.message.reply_text(
-            f"Флаг отмены: {FORCED_ATTENDANCE_ACTIVE}.\n"
+            f"Флаг форс-опроса: {FORCED_ATTENDANCE_ACTIVE}.\n"
             f"Причина отмены: {escape(CANCELLED_POLL_REASON) if CANCELLED_POLL_REASON else 'не указана'}.\n"
             f"Режим «Стоп Срач» активен: {SRACH_LOCK_ACTIVE}\n"
             f"Таймер «Стоп Срач»: {SRACH_LOCK_JOB.next_t if SRACH_LOCK_JOB else 'не установлен'}\n"
