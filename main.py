@@ -883,6 +883,18 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
         await command_voic(update, context)
         return
+    
+    if text.startswith("!флаг") or text.startswith("/checkflag"):
+        if not is_creator and current_rank < 6:
+            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+            return
+        await update.message.reply_text(
+            f"Флаг отмены: {FORCED_ATTENDANCE_ACTIVE}.\n"
+            f"Причина отмены: {escape(CANCELLED_POLL_REASON) if CANCELLED_POLL_REASON else 'не указана'}.\n"
+            f"Режим «Стоп Срач» активен: {SRACH_LOCK_ACTIVE}\n"
+            f"Таймер «Стоп Срач»: {SRACH_LOCK_JOB.next_t if SRACH_LOCK_JOB else 'не установлен'}\n"
+        )
+        return
 
 
     
@@ -1015,6 +1027,7 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE) -> bool:
         # Сбрасываем флаги для следующего дня
         CANCELLED_POLL_REASON = None
         FORCED_ATTENDANCE_ACTIVE = False 
+        print("Флаг опроса сброшен")
         return False
 
     try:
@@ -1050,7 +1063,7 @@ async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE) -> bool:
             await context.bot.pin_chat_message(chat_id=config.MAIN_GROUP_CHAT_ID, message_id=message.message_id)
         except Exception as e:
             print(f"Ошибка закрепления в 20:00: {e}", file=sys.stderr)
-            
+        print("✅ Успешно отправлен опрос в 20:00. ID опроса:", message.poll.id)
         return True
 
     except Exception as fatal_e:
@@ -1145,7 +1158,7 @@ async def close_place_and_start_attendance(context: ContextTypes.DEFAULT_TYPE):
             chat_id=str(target_chat_id),
             options_json=json.dumps(attendance_options),
         )
-
+        print(f"✅ Успешно обработан опрос в 13:00. Место: {winning_place}, ID нового опроса: {attendance_msg.poll.id}")
     except Exception as e:
         print(f"Ошибка при обработке цепочки опросов в 13:00: {e}", file=sys.stderr)
 
