@@ -281,3 +281,11 @@ def db_increment_inactivity():
     with db_connect() as conn:
         conn.execute("UPDATE users SET days_inactive = days_inactive + 1")
         conn.commit()
+
+def db_get_last_poll():
+    """Выносим синхронный SQL в отдельный поток, чтобы не фризить бота"""
+    with db_connect() as conn:
+        cur = conn.execute(
+            "SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1"
+        )
+        return cur.fetchone()

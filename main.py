@@ -33,7 +33,8 @@ from database import (
     db_get_command_rank, db_set_command_rank, db_get_command_ranks,
     db_fix_default_rank_bug,
     db_set_nickname, db_get_nickname, db_set_status, db_get_status,
-    db_set_birthday, db_get_birthday, db_get_profile_extra, db_get_todays_birthdays
+    db_set_birthday, db_get_birthday, db_get_profile_extra, db_get_todays_birthdays,
+    db_get_last_poll
 )
 
 # Глобальное состояние для отмены опроса на текущий вечер
@@ -895,8 +896,6 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"Таймер «Стоп Срач»: {SRACH_LOCK_JOB.next_t if SRACH_LOCK_JOB else 'не установлен'}\n"
         )
         return
-
-
     
 # ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1248,6 +1247,8 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 pass  
 
 # ---------- Крон-задачи контроля активности ----------
+from telegram.error import NetworkError, TimedOut, RetryAfter
+
 async def daily_activity_check(context: ContextTypes.DEFAULT_TYPE):
     db_increment_inactivity()
     users = db_get_all_users()
@@ -1255,32 +1256,38 @@ async def daily_activity_check(context: ContextTypes.DEFAULT_TYPE):
     for uid, username, full_name, days_inactive in users:
         if days_inactive > 0 and days_inactive % config.PING_INTERVAL_DAYS == 0:
             
-            # === ПРОВЕРКА: НАХОДИТСЯ ЛИ ЮЗЕР В ГРУППЕ ===
+            # 1. Безопасная проверка: в чате ли еще юзер
             try:
                 member = await context.bot.get_chat_member(chat_id=config.MAIN_GROUP_CHAT_ID, user_id=uid)
-                # Если статус "left" (вышел) или "kicked" (забанен) — скипаем его
                 if member.status in ["left", "kicked"]:
                     continue
+            except (NetworkError, TimedOut):
+                # Если упала сеть на проверке — не падаем, просто попробуем в следующий раз
+                print(f"⚠️ Сетевая ошибка при проверке пользователя {uid}, пропускаем...", file=sys.stderr)
+                continue
             except Exception:
-                # Если Телеграм вернул ошибку (например, юзер вообще удалил аккаунт или бот его не видит) — тоже скипаем
                 continue
 
-            # Если проверка прошла — пингуем
             silent_mention = format_user_link(uid, username, full_name)
             display_name = escape(full_name or username or str(uid))
             
+            # 2. Безопасная отправка сообщения
             try:
                 await context.bot.send_message(
                     chat_id=config.MAIN_GROUP_CHAT_ID,
                     text=f"{silent_mention}🔔 Эй, {display_name}, ты молчишь уже {days_inactive} дня(ней)! Напиши хоть точку, чтобы остаться в группе.",
                     parse_mode=ParseMode.HTML
                 )
-                # ВАЖНО: Пауза 100 миллисекунд между итерациями, чтобы не словить Flood Control
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.1) # Защита от флуда
                 
-            except telegram.error.RetryAfter as e:
-                # Если Телеграм всё-таки выдал ограничение скорости, послушно спим сколько просит
+            except RetryAfter as e:
+                # Если Телеграм просит притормозить (Flood Control)
                 await asyncio.sleep(e.retry_after)
+            except (NetworkError, TimedOut) as net_err:
+                # ВОТ ТУТ МЫ ЛОВИМ ТОТ САМЫЙ BAD GATEWAY / TIMEOUT
+                print(f"📡 Ошибка сети Telegram ({net_err}) при пинге {uid}. Пропускаем.", file=sys.stderr)
+                # Даем сети «отдохнуть» пару секунд перед следующим юзером
+                await asyncio.sleep(2) 
             except Exception as e:
                 print(f"Ошибка отправки пинга для {uid}: {e}", file=sys.stderr)
 
@@ -1411,13 +1418,7 @@ async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-async def db_get_last_poll():
-    """Выносим синхронный SQL в отдельный поток, чтобы не фризить бота"""
-    with sqlite3.connect(config.DB_PATH) as conn:
-        cur = conn.execute(
-            "SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1"
-        )
-        return cur.fetchone()
+
 
 async def poll_job_wrapper(ctx):
     # Запускаем отправку опроса и сохраняем результат (True или False)
