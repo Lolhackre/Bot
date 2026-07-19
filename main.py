@@ -881,6 +881,10 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await funmodule.command_excuse(update, context)
         return
 
+    if text == "!цитата":
+        await funmodule.command_quote(update, context)
+        return
+
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
         await command_voic(update, context)
         return
