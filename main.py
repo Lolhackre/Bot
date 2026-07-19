@@ -496,6 +496,14 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             help_text += (
                 f"🧪 <code>/test_poll</code> — Принудительный мгновенный запуск тестового опроса. (Ранг {format_rank(cmd_ranks.get('тест_опрос', 6))}+)\n"
             )
+        if is_creator or current_rank >= cmd_ranks.get("бункер_отмена", 3):
+            help_text += (
+                f"🗑 <code>!отменить бункер</code> — Расформировать несобранное лобби Бункера. (Ранг {format_rank(cmd_ranks.get('бункер_отмена', 3))}+)\n"
+            )
+        if is_creator or current_rank >= cmd_ranks.get("бункер_афк", 4):
+            help_text += (
+                f"⏱ <code>!афк бункер [@юзер / ID]</code> — Исключить афк-игрока из Бункера (можно и ответом на сообщение). (Ранг {format_rank(cmd_ranks.get('бункер_афк', 4))}+)\n"
+            )
 
         if is_creator or current_rank >= 6:
             help_text += (
@@ -915,6 +923,57 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         del bunker_and_agent.BUNKER_GAMES[update.message.chat_id]
         await update.message.reply_text("🛑 Игра в Бункер остановлена.")
+        return
+
+    # !отменить бункер — расформировать лобби, если игра ещё не началась (т.е. не набралось людей)
+    if text.startswith("!отменить бункер"):
+        min_rank = db_get_command_rank("бункер_отмена")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(
+                f"⛔ Отказано в доступе. Ваш ранг: {format_rank(current_rank)}. Требуется ранг: {format_rank(min_rank)}."
+            )
+            return
+        game = bunker_and_agent.BUNKER_GAMES.get(update.message.chat_id)
+        if not game:
+            await update.message.reply_text("ℹ️ В этом чате сейчас нет активной игры в Бункер.")
+            return
+        if game["phase"] != "lobby":
+            await update.message.reply_text(
+                "⚠️ Игра уже началась, расформировать лобби нельзя. Чтобы прервать саму игру, используйте <code>!бункер стоп</code>.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        del bunker_and_agent.BUNKER_GAMES[update.message.chat_id]
+        await update.message.reply_text("🗑 Лобби Бункера расформировано, игра не состоится.")
+        return
+
+    # !афк бункер @юз / реплаем — исключить неактивного игрока из лобби или из уже идущей игры
+    if text.startswith("!афк бункер"):
+        min_rank = db_get_command_rank("бункер_афк")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(
+                f"⛔ Отказано в доступе. Ваш ранг: {format_rank(current_rank)}. Требуется ранг: {format_rank(min_rank)}."
+            )
+            return
+        arg = raw_text[len("!афк бункер"):].strip()
+        resolved = await resolve_target_user(update, context, arg if arg else None)
+        if resolved is None:
+            await update.message.reply_text(
+                "⚠️ Укажи участника: ответом на его сообщение, через @юзернейм или ID.\n"
+                "Например: <code>!афк бункер @username</code>",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        target_id, target_username, target_full_name = resolved
+        ok, info = await bunker_and_agent.kick_afk_player(update.message.chat_id, target_id, context)
+        if not ok:
+            await update.message.reply_text(f"⚠️ {info}")
+            return
+        if info == "lobby":
+            await update.message.reply_text(
+                f"🚪 {format_user_link(target_id, target_username, target_full_name)} удалён(а) из лобби Бункера за афк.",
+                parse_mode=ParseMode.HTML
+            )
         return
 
     if text.startswith("!бункер"):
