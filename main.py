@@ -259,6 +259,11 @@ async def handle_private_message(update: Update, context: ContextTypes.DEFAULT_T
             pass
         return
 
+    # Команда !войс/!voic — доступна в ЛС только Главе/Тех.админу (проверка внутри command_voic)
+    if raw_text.lower().startswith("!войс") or raw_text.lower().startswith("!voic"):
+        await command_voic(update, context)
+        return
+
     # Логика для обычных сообщений (жалоб)
     await context.bot.send_message(
         chat_id=config.ADMIN_CHAT_ID,
@@ -1370,33 +1375,53 @@ async def daily_birthday_check(context: ContextTypes.DEFAULT_TYPE):
 import asyncio
 
 async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
-        return
-    
     user = update.effective_user
+    is_creator = (user.id == 8049751536)
+    current_rank = db_get_user_rank(user.id)
+    is_private = update.message.chat.type == "private"
+
+    if is_private:
+        # В личке команда доступна только Главе/Тех.админу
+        if not is_creator and current_rank < 6:
+            return
+    else:
+        if str(update.message.chat_id) != config.MAIN_GROUP_CHAT_ID:
+            return
+        # Ограничение доступа в группе (Создатель или Ранг >= 5)
+        if not is_creator and current_rank < 5:
+            await update.message.reply_text("⛔ У тебя нет доступа к этой команде.")
+            return
+
     raw_text = update.message.text or ""
-    
+
     # Автоматически определяем длину команды, чтобы корректно отрезать её от текста
     first_word = raw_text.split()[0].lower() if raw_text.split() else ""
-    text = raw_text[len(first_word):].strip()
-    
+    rest = raw_text[len(first_word):].strip()
+
+    # Определяем голос: первое слово после команды может быть именем голоса из VOICE_LIBRARY
+    voice_key = config.DEFAULT_VOICE_KEY
+    text = rest
+    rest_parts = rest.split(maxsplit=1)
+    if rest_parts and rest_parts[0].lower() in config.VOICE_LIBRARY:
+        voice_key = rest_parts[0].lower()
+        text = rest_parts[1] if len(rest_parts) > 1 else ""
+
     if not text:
+        voice_list = ", ".join(config.VOICE_LIBRARY.keys())
         await update.message.reply_text(
-            "✅ Использование:\n<code>!войс Твой текст здесь</code>", 
+            f"✅ Использование:\n<code>!войс Твой текст здесь</code> (голос по умолчанию)\n"
+            f"<code>!войс [имя] Твой текст здесь</code>\n\n"
+            f"Доступные голоса: {voice_list}",
             parse_mode=ParseMode.HTML
         )
         return
-    
+
     if len(text) > 600:
         await update.message.reply_text("❌ Слишком длинный текст (макс 600 символов).")
         return
 
-    # Ограничение доступа (Создатель или Ранг >= 5)
-    if user.id != 8049751536 and db_get_user_rank(user.id) < 5:
-        await update.message.reply_text("⛔ У тебя нет доступа к этой команде.")
-        return
-
-    status_msg = await update.message.reply_text("🎙 Генерирую голос Хоумлендера...")
+    voice_info = config.VOICE_LIBRARY[voice_key]
+    status_msg = await update.message.reply_text(f"🎙 Генерирую голос {voice_info['label']}...")
     tmp_path = None
 
     try:
@@ -1407,7 +1432,7 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audio = await asyncio.to_thread(
             client.tts.convert,
             text=text,
-            reference_id=config.HOMELANDER_VOICE_ID,
+            reference_id=voice_info["id"],
             model="s2.1-pro-free"
         )
         
@@ -1415,15 +1440,11 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save(audio, tmp_file.name)
             tmp_path = tmp_file.name
 
-        display_name = escape(user.full_name or user.username or "Пользователь")
-
         with open(tmp_path, 'rb') as voice:
             await context.bot.send_voice(
                 chat_id=update.message.chat_id,
                 voice=voice,
-                caption=f"🎤 {display_name}",
-                reply_to_message_id=update.message.message_id,
-                parse_mode=ParseMode.HTML
+                reply_to_message_id=update.message.message_id
             )
         
         await status_msg.delete()
