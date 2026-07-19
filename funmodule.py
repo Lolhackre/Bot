@@ -745,7 +745,6 @@ QUOTES = [
 ]
 
 # (остальной код файла остаётся без изменений)
-]
 
 QUOTE_COOLDOWN_TIME = timedelta(hours=4)
 
