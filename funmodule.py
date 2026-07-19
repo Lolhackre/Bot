@@ -1002,4 +1002,3 @@ async def command_who_of_us(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     template = random.choice(WHO_OF_US_TEMPLATES)
     text = template.format(adj=escape(adjective), name=winner_link)
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
- 
