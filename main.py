@@ -506,6 +506,8 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     elif text in ("!моя карма", "!моякарма"):
         await show_my_karma(update, context)
+    elif text == "!уровень":
+        await show_level(update, context)
         return
 
     # 3. Команда !отменить выбор (причина) — Ранг >= 3
@@ -885,6 +887,15 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await funmodule.command_quote(update, context)
         return
 
+    if text == "!совместимость":
+        await funmodule.command_compatibility(update, context)
+        return
+
+    if text.startswith("!кто из нас"):
+        adjective = raw_text[len("!кто из нас"):].strip()
+        await funmodule.command_who_of_us(update, context, adjective)
+        return
+
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
         await command_voic(update, context)
         return
@@ -981,6 +992,48 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, targe
         f"🚶 Карма за прогулки: {w_karma} очков (Прогулок: {walks})"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+def compute_level(total_score):
+    """Простая RPG-кривая уровней: на N-й уровень нужно 10*N^2 очков суммарно."""
+    total_score = max(total_score, 0)
+    level = int((total_score / 10) ** 0.5) + 1
+    current_threshold = 10 * (level - 1) ** 2
+    next_threshold = 10 * level ** 2
+    into_level = total_score - current_threshold
+    span = next_threshold - current_threshold
+    progress = into_level / span if span > 0 else 1.0
+    return level, into_level, span, progress
+
+async def show_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    min_rank = db_get_command_rank("уровень")
+    current_rank = db_get_user_rank(user.id)
+    is_creator = (user.id == 8049751536)
+    if not is_creator and current_rank < min_rank:
+        await update.message.reply_text("⛔ Недостаточно прав для этой команды.")
+        return
+
+    stats = db_get_user_stats(user.id)
+    if not stats:
+        await update.message.reply_text("У вас пока нет статистики.")
+        return
+
+    _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
+    total_score = m_score + w_karma
+    level, into_level, span, progress = compute_level(total_score)
+
+    filled = round(progress * 10)
+    bar = "🟦" * filled + "⬜" * (10 - filled)
+
+    text = (
+        f"🧬 <b>Уровень для {format_user_link(user.id, un, fn)}</b>\n\n"
+        f"⭐ Текущий уровень: <b>{level}</b>\n"
+        f"{bar} {into_level}/{span} очков до след. уровня\n\n"
+        f"💬 Карма за общение: {m_score}\n"
+        f"🚶 Карма за прогулки: {w_karma}\n"
+        f"🎖 Ранг доступа: {format_rank(rank, is_creator)}"
+    )
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def show_my_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
