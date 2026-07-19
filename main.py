@@ -5,7 +5,7 @@ from datetime import time as dtime, datetime, timedelta
 from html import escape
 
 import funmodule
-import extra_features
+import bunker_and_agent
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -464,7 +464,10 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "🖊 <b>Профиль:</b>\n"
             "🏷 <code>+ник [текст]</code> — Задать кастомный ник для статистики и действий (пусто — сбросить).\n"
             "💭 <code>+статус [текст]</code> — Задать статус/описание профиля (пусто — сбросить).\n"
-            "🎂 <code>+день рождения ДД.ММ</code> — Сохранить дату рождения, бот поздравит в этот день (пусто — удалить).\n"
+            "🎂 <code>+день рождения ДД.ММ</code> — Сохранить дату рождения, бот поздравит в этот день (пусто — удалить).\n\n"
+            "☢️ <b>Игра «Бункер»:</b>\n"
+            "🚪 <code>!бункер [число выживших]</code> — Создать лобби игры (минимум 4 игрока).\n"
+            "🛑 <code>!бункер стоп</code> — Остановить текущую игру (создатель лобби или админ).\n"
         )
 
         if is_creator or current_rank >= cmd_ranks.get("действие", 0):
@@ -900,6 +903,22 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if text.startswith("!кто из нас"):
         adjective = raw_text[len("!кто из нас"):].strip()
         await funmodule.command_who_of_us(update, context, adjective)
+        return
+
+    if text.startswith("!бункер стоп") or text.startswith("!бункер отмена"):
+        game = bunker_and_agent.BUNKER_GAMES.get(update.message.chat_id)
+        if not game:
+            await update.message.reply_text("ℹ️ В этом чате сейчас нет активной игры в Бункер.")
+            return
+        if not is_creator and current_rank < 6 and user_id != game["host_id"]:
+            await update.message.reply_text("⛔ Остановить игру может только создатель лобби или админ.")
+            return
+        del bunker_and_agent.BUNKER_GAMES[update.message.chat_id]
+        await update.message.reply_text("🛑 Игра в Бункер остановлена.")
+        return
+
+    if text.startswith("!бункер"):
+        await bunker_and_agent.command_bunker_start(update, context)
         return
 
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
@@ -1542,7 +1561,7 @@ async def poll_job_wrapper(ctx):
 def main():
     db_init()
     init_votes_tracking()
-    extra_features.init_extra_features_db()
+    bunker_and_agent.init_agent_db()
     app = Application.builder().token(config.TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -1564,28 +1583,18 @@ def main():
         group=1
     )
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED, handle_group_message), group=1) 
-    
+
+    # 3. Отдельная группа — отслеживание реплаев для фичи "Тайный агент" (не мешает командам выше)
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.GROUPS & filters.REPLY & ~filters.UpdateType.EDITED, bunker_and_agent.watch_agent_replies),
+        group=2
+    )
+
+    # Кнопки игры "Бункер" (bj/bs/bv) должны быть доступны ВСЕМ игрокам, а не только рангу 6+,
+    # поэтому регистрируем их ПЕРЕД общим handle_callback_query (внутри группы срабатывает первый совпавший хэндлер)
+    app.add_handler(CallbackQueryHandler(bunker_and_agent.handle_bunker_callback, pattern=r"^(bj|bs|bv):"))
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
-
-    # ---- Новые "приколюхи" (extra_features.py) ----
-    # Группы 10-12 выбраны специально подальше от существующих 0/1,
-    # чтобы не конфликтовать с диспетчером "!"-команд и режимом "Стоп Срач"
-    app.add_handler(
-        MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED,
-                        extra_features.extra_features_passive_handler),
-        group=10
-    )
-    app.add_handler(
-        MessageHandler(filters.Regex(r'(?i)^!суд(\s|$)') & filters.ChatType.GROUPS,
-                        extra_features.command_court),
-        group=11
-    )
-    app.add_handler(
-        MessageHandler(filters.Regex(r'(?i)^!редкости(\s|$)') & filters.ChatType.GROUPS,
-                        extra_features.command_egg_leaderboard),
-        group=12
-    )
 
     jq = app.job_queue
     
@@ -1596,13 +1605,17 @@ def main():
     jq.run_daily(daily_birthday_check, time=dtime(hour=9, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(funmodule.daily_balabol_check, time=dtime(hour=22, minute=00, tzinfo=config.KYIV_TZ))
 
-    # ---- Новые "приколюхи" (extra_features.py) ----
-    jq.run_daily(extra_features.weekly_chronicle_job,
-                 time=dtime(hour=21, minute=0, tzinfo=config.KYIV_TZ),
-                 days=(6,))  # воскресенье
-    jq.run_daily(extra_features.post_word_of_day,
-                 time=dtime(hour=12, minute=0, tzinfo=config.KYIV_TZ))
-
+    # "Тайный агент": пары назначаются в понедельник, награда подводится в воскресенье вечером
+    jq.run_daily(
+        bunker_and_agent.weekly_agent_pairing_job,
+        time=dtime(hour=9, minute=0, tzinfo=config.KYIV_TZ),
+        days=(0,)
+    )
+    jq.run_daily(
+        bunker_and_agent.weekly_agent_reward_job,
+        time=dtime(hour=21, minute=0, tzinfo=config.KYIV_TZ),
+        days=(6,)
+    )
     print("Бот успешно запущен.")
     app.run_polling()
 
