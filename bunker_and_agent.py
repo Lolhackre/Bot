@@ -247,6 +247,8 @@ async def command_bunker_start(update: Update, context: ContextTypes.DEFAULT_TYP
         "bunker_info": random.choice(BUNKER_INFOS),
         "survivors_target": None,
         "override_survivors": override_survivors,
+        "voting_alive": [],
+        "voting_message_id": None,
     }
     BUNKER_GAMES[chat_id] = game
 
@@ -260,7 +262,18 @@ async def command_bunker_start(update: Update, context: ContextTypes.DEFAULT_TYP
 async def _run_reveal_round(chat_id, context):
     game = BUNKER_GAMES[chat_id]
     category_index = game["round_index"]
+
     if category_index >= len(CARD_ORDER):
+        # Все характеристики уже раскрыты, но нужно ещё исключать людей —
+        # просто показываем полную карточку каждого оставшегося участника
+        alive = [uid for uid in game["order"] if game["players"][uid]["alive"]]
+        lines = ["📋 <b>Все характеристики уже раскрыты. Информация об оставшихся участниках:</b>\n"]
+        for uid in alive:
+            player = game["players"][uid]
+            card_text = ", ".join(f"{k}: {v}" for k, v in player["card"].items())
+            lines.append(f"• {escape(player['name'])} — {escape(card_text)}")
+        await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML)
+        await asyncio.sleep(1)
         await _start_voting(chat_id, context)
         return
 
@@ -270,14 +283,40 @@ async def _run_reveal_round(chat_id, context):
         player = game["players"][uid]
         if not player["alive"]:
             continue
-        value = player["card"][category]
         player["revealed"].append(category)
-        lines.append(f"• {escape(player['name'])} - {escape(value)}")
+        # Дублируем всю уже известную информацию, а не только новую характеристику,
+        # чтобы карточка каждого игрока была видна целиком с накоплением раундов
+        known = ", ".join(f"{k}: {player['card'][k]}" for k in CARD_ORDER if k in player["revealed"])
+        lines.append(f"• {escape(player['name'])} — {escape(known)}")
 
     game["round_index"] += 1
     await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML)
     await asyncio.sleep(1)
     await _start_voting(chat_id, context)
+
+
+def _voting_text(game, alive):
+    lines = ["🗳 <b>Голосование: кого исключить из бункера?</b>\n"]
+    lines.append(f"Проголосовали: {len(game['votes'])}/{len(alive)}\n")
+    if game["votes"]:
+        for voter_id, target in game["votes"].items():
+            voter_name = escape(game["players"][voter_id]["name"])
+            if target == "skip":
+                lines.append(f"✅ {voter_name} — пропустил(а) голосование")
+            else:
+                target_name = escape(game["players"][target]["name"])
+                lines.append(f"✅ {voter_name} → {target_name}")
+    return "\n".join(lines)
+
+
+def _voting_keyboard(chat_id, alive):
+    game = BUNKER_GAMES[chat_id]
+    buttons = [
+        [InlineKeyboardButton(f"❌ {game['players'][uid]['name']}", callback_data=f"bv:{chat_id}:{uid}")]
+        for uid in alive
+    ]
+    buttons.append([InlineKeyboardButton("⏭ Пропустить голос", callback_data=f"bv:{chat_id}:skip")])
+    return InlineKeyboardMarkup(buttons)
 
 
 async def _start_voting(chat_id, context):
@@ -290,24 +329,27 @@ async def _start_voting(chat_id, context):
 
     game["phase"] = "voting"
     game["votes"] = {}
-    buttons = [
-        [InlineKeyboardButton(f"❌ {game['players'][uid]['name']}", callback_data=f"bv:{chat_id}:{uid}")]
-        for uid in alive
-    ]
-    await context.bot.send_message(
+    game["voting_alive"] = alive
+
+    message = await context.bot.send_message(
         chat_id=chat_id,
-        text="🗳 Голосование: кого исключить из бункера?",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        text=_voting_text(game, alive),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_voting_keyboard(chat_id, alive)
     )
+    game["voting_message_id"] = message.message_id
 
 
 async def _tally_votes(chat_id, context):
     game = BUNKER_GAMES[chat_id]
     counts = {}
     for target in game["votes"].values():
+        if target == "skip":
+            continue
         counts[target] = counts.get(target, 0) + 1
 
     if not counts:
+        await context.bot.send_message(chat_id=chat_id, text="🤝 Никто не набрал голосов — в этом раунде исключения не будет.")
         await _run_reveal_round(chat_id, context)
         return
 
@@ -418,20 +460,43 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
     elif action == "bv":
         if len(parts) < 3:
             return
-        try:
-            target_id = int(parts[2])
-        except ValueError:
-            return
+        target_raw = parts[2]
+
         if game["phase"] != "voting":
             await query.answer("Сейчас не время голосовать.", show_alert=True)
             return
         if user.id not in game["players"] or not game["players"][user.id]["alive"]:
             await query.answer("Ты не участвуешь в игре или уже выбыл(а).", show_alert=True)
             return
+        if user.id in game["votes"]:
+            await query.answer("Ты уже проголосовал(а), изменить голос нельзя.", show_alert=True)
+            return
 
-        game["votes"][user.id] = target_id
-        await query.answer("Голос принят!")
+        if target_raw == "skip":
+            game["votes"][user.id] = "skip"
+            await query.answer("Голос пропущен ⏭")
+        else:
+            try:
+                target_id = int(target_raw)
+            except ValueError:
+                return
+            if target_id not in game["players"] or not game["players"][target_id]["alive"]:
+                await query.answer("Этот игрок уже выбыл из игры.", show_alert=True)
+                return
+            game["votes"][user.id] = target_id
+            await query.answer("Голос принят! ✅")
 
-        alive_count = sum(1 for p in game["players"].values() if p["alive"])
-        if len(game["votes"]) >= alive_count:
+        alive = game.get("voting_alive") or [uid for uid in game["order"] if game["players"][uid]["alive"]]
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=game.get("voting_message_id", query.message.message_id),
+                text=_voting_text(game, alive),
+                parse_mode=ParseMode.HTML,
+                reply_markup=_voting_keyboard(chat_id, alive)
+            )
+        except Exception:
+            pass
+
+        if len(game["votes"]) >= len(alive):
             await _tally_votes(chat_id, context)
