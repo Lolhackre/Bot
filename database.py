@@ -271,6 +271,20 @@ def db_get_todays_birthdays(day_month_str):
         cur = conn.execute("SELECT user_id, username, full_name, nickname FROM users WHERE birthday = ?", (day_month_str,))
         return cur.fetchall()
 
+def db_get_random_active_user(exclude_user_id=None):
+    """Возвращает случайного участника, который хоть раз писал в чат (для !кто из нас)"""
+    with db_connect() as conn:
+        if exclude_user_id is not None:
+            cur = conn.execute(
+                "SELECT user_id, username, full_name FROM users WHERE messages_count > 0 AND user_id != ? ORDER BY RANDOM() LIMIT 1",
+                (exclude_user_id,)
+            )
+        else:
+            cur = conn.execute(
+                "SELECT user_id, username, full_name FROM users WHERE messages_count > 0 ORDER BY RANDOM() LIMIT 1"
+            )
+        return cur.fetchone()
+
 def db_get_all_users():
     with db_connect() as conn:
         cur = conn.execute("SELECT user_id, username, full_name, days_inactive FROM users")
