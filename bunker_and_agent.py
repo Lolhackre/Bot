@@ -272,14 +272,16 @@ async def command_bunker_start(update: Update, context: ContextTypes.DEFAULT_TYP
         "override_survivors": override_survivors,
         "voting_alive": [],
         "voting_message_id": None,
+        "lobby_message_id": None,
     }
     BUNKER_GAMES[chat_id] = game
 
-    await update.message.reply_text(
+    message = await update.message.reply_text(
         _lobby_text(game),
         parse_mode=ParseMode.HTML,
         reply_markup=_lobby_keyboard(chat_id)
     )
+    game["lobby_message_id"] = message.message_id
 
 
 async def _run_reveal_round(chat_id, context):
@@ -423,6 +425,87 @@ async def _finish_game(chat_id, context):
 
     await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML)
     del BUNKER_GAMES[chat_id]
+
+
+async def kick_afk_player(chat_id, target_id, context):
+    """Исключает игрока из Бункера за афк — из лобби (тихо) или из активной игры (с раскрытием карты).
+    Возвращает (True, "lobby"/"kicked") при успехе или (False, "причина") при ошибке."""
+    game = BUNKER_GAMES.get(chat_id)
+    if not game or game["phase"] == "finished":
+        return False, "Сейчас в этом чате нет активной игры в Бункер."
+
+    if target_id not in game["players"]:
+        return False, "Этот человек не участвует в текущей игре в Бункер."
+
+    # Игра ещё не началась — просто убираем из лобби без лишнего шума
+    if game["phase"] == "lobby":
+        del game["players"][target_id]
+        game["order"] = [uid for uid in game["order"] if uid != target_id]
+        if game.get("lobby_message_id"):
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=game["lobby_message_id"],
+                    text=_lobby_text(game),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=_lobby_keyboard(chat_id)
+                )
+            except Exception:
+                pass
+        return True, "lobby"
+
+    player = game["players"][target_id]
+    if not player["alive"]:
+        return False, "Этот игрок уже выбыл из игры ранее."
+
+    # Игра уже идёт — исключаем как обычно выбывшего, с раскрытием карты
+    player["alive"] = False
+    name = player["name"]
+    card_text = ", ".join(f"{k}: {v}" for k, v in player["card"].items())
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            f"⏱ {escape(name)} исключён(а) из бункера за неактивность (афк).\n\n"
+            f"📇 Его(её) карта полностью раскрывается:\n{escape(card_text)}"
+        )
+    )
+
+    # Если шло голосование — убираем голос самого афкера и голоса, отданные против него,
+    # затем обновляем сообщение с кнопками, чтобы он не висел кандидатом на исключение
+    if game["phase"] == "voting":
+        game["votes"].pop(target_id, None)
+        for voter_id in list(game["votes"].keys()):
+            if game["votes"][voter_id] == target_id:
+                del game["votes"][voter_id]
+
+        alive = [uid for uid in game["order"] if game["players"][uid]["alive"]]
+        game["voting_alive"] = alive
+
+        if len(alive) <= game["survivors_target"]:
+            await _finish_game(chat_id, context)
+            return True, "kicked"
+
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=game.get("voting_message_id"),
+                text=_voting_text(game, alive),
+                parse_mode=ParseMode.HTML,
+                reply_markup=_voting_keyboard(chat_id, alive)
+            )
+        except Exception:
+            pass
+
+        if game["votes"] and len(game["votes"]) >= len(alive):
+            await _tally_votes(chat_id, context)
+        return True, "kicked"
+
+    # Между раундами (маловероятная фаза "running" без активного голосования)
+    alive = [uid for uid in game["order"] if game["players"][uid]["alive"]]
+    if len(alive) <= game["survivors_target"]:
+        await _finish_game(chat_id, context)
+    return True, "kicked"
 
 
 async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
