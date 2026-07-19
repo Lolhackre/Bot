@@ -5,6 +5,7 @@ from datetime import time as dtime, datetime, timedelta
 from html import escape
 
 import funmodule
+import extra_features
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -1541,6 +1542,7 @@ async def poll_job_wrapper(ctx):
 def main():
     db_init()
     init_votes_tracking()
+    extra_features.init_extra_features_db()
     app = Application.builder().token(config.TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -1566,6 +1568,25 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
 
+    # ---- Новые "приколюхи" (extra_features.py) ----
+    # Группы 10-12 выбраны специально подальше от существующих 0/1,
+    # чтобы не конфликтовать с диспетчером "!"-команд и режимом "Стоп Срач"
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED,
+                        extra_features.extra_features_passive_handler),
+        group=10
+    )
+    app.add_handler(
+        MessageHandler(filters.Regex(r'(?i)^!суд(\s|$)') & filters.ChatType.GROUPS,
+                        extra_features.command_court),
+        group=11
+    )
+    app.add_handler(
+        MessageHandler(filters.Regex(r'(?i)^!редкости(\s|$)') & filters.ChatType.GROUPS,
+                        extra_features.command_egg_leaderboard),
+        group=12
+    )
+
     jq = app.job_queue
     
 
@@ -1574,6 +1595,14 @@ def main():
     jq.run_daily(daily_activity_check, time=dtime(hour=10, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(daily_birthday_check, time=dtime(hour=9, minute=0, tzinfo=config.KYIV_TZ))
     jq.run_daily(funmodule.daily_balabol_check, time=dtime(hour=22, minute=00, tzinfo=config.KYIV_TZ))
+
+    # ---- Новые "приколюхи" (extra_features.py) ----
+    jq.run_daily(extra_features.weekly_chronicle_job,
+                 time=dtime(hour=21, minute=0, tzinfo=config.KYIV_TZ),
+                 days=(6,))  # воскресенье
+    jq.run_daily(extra_features.post_word_of_day,
+                 time=dtime(hour=12, minute=0, tzinfo=config.KYIV_TZ))
+
     print("Бот успешно запущен.")
     app.run_polling()
 
