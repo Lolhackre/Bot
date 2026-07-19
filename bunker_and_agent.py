@@ -531,7 +531,9 @@ def _apply_action_effect(game, card, user_id, target_id):
 
 def _action_card_alert(card, ok, reason):
     lines = [card["name"], card["desc"], f"Условие: {card['condition_desc']}"]
-    if not ok:
+    if ok:
+        lines.append("🟢 Доступна к использованию прямо сейчас.")
+    else:
         lines.append(f"❌ Сейчас недоступно: {reason}")
     text = "\n".join(lines)
     if len(text) > 200:
@@ -683,6 +685,7 @@ def _lobby_keyboard(chat_id):
         [InlineKeyboardButton("🔍 Моя карта", callback_data=f"bc:{chat_id}")],
         [InlineKeyboardButton("🎴 Карта действия", callback_data=f"ba:{chat_id}"),
          InlineKeyboardButton("👻 Судьба", callback_data=f"bf:{chat_id}")],
+        [InlineKeyboardButton("✅ Применить карту", callback_data=f"bu:{chat_id}")],
         [InlineKeyboardButton("▶️ Начать игру", callback_data=f"bs:{chat_id}")],
     ])
 
@@ -823,17 +826,22 @@ def _voting_keyboard(chat_id, alive):
     buttons.append([InlineKeyboardButton("🔍 Моя карта", callback_data=f"bc:{chat_id}")])
     buttons.append([InlineKeyboardButton("🎴 Карта действия", callback_data=f"ba:{chat_id}"),
                      InlineKeyboardButton("👻 Судьба", callback_data=f"bf:{chat_id}")])
+    buttons.append([InlineKeyboardButton("✅ Применить карту", callback_data=f"bu:{chat_id}")])
     return InlineKeyboardMarkup(buttons)
 
 
 def _status_keyboard(chat_id):
     """Компактная клавиатура с картами (без голосования) — цепляется к служебным сообщениям
     игры (раскрытие раунда, итоги голосования и т.д.), чтобы игрок мог посмотреть/использовать
-    свою карту в любой момент, а не только в лобби или во время голосования."""
+    свою карту в любой момент, а не только в лобби или во время голосования.
+    «Карта действия» — только показывает описание и текущий статус карты, ничего не применяет
+    (безопасно нажимать, если просто забыл(а), что за карта). «Применить карту» — отдельная
+    кнопка, которая реально запускает эффект и тратит карту."""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔍 Моя карта", callback_data=f"bc:{chat_id}")],
         [InlineKeyboardButton("🎴 Карта действия", callback_data=f"ba:{chat_id}"),
          InlineKeyboardButton("👻 Судьба", callback_data=f"bf:{chat_id}")],
+        [InlineKeyboardButton("✅ Применить карту", callback_data=f"bu:{chat_id}")],
     ])
 
 
@@ -1161,7 +1169,8 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
                 f"🚨 Игра началась! Участников: {len(game['players'])}. "
                 f"В бункере есть место для {game['survivors_target']}.\n"
                 f"Каждый раунд открывается одна характеристика всех участников, затем голосование за исключение.\n"
-                f"Свою карту действия и карту судьбы можно посмотреть в любой момент — кнопки под сообщениями игры или командой !карта."
+                f"Свою карту действия и карту судьбы можно посмотреть в любой момент — кнопки под сообщениями игры или командой !карта.\n"
+                f"«🎴 Карта действия» только показывает описание и статус (безопасно нажимать), а «✅ Применить карту» реально использует её."
             ),
             reply_markup=_status_keyboard(chat_id)
         )
@@ -1212,8 +1221,29 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
             await _tally_votes(chat_id, context)
 
     elif action == "ba":
-        # Использование карты действия (баф). Если карта не требует цели — применяется сразу,
-        # иначе бот шлёт в чат отдельное сообщение с выбором цели (доступное только автору).
+        # Информация о карте действия — ТОЛЬКО показывает название/описание/статус.
+        # Ничего не применяет и не тратит карту, поэтому её всегда безопасно нажимать,
+        # если просто забыл(а), что за карта и доступна ли она сейчас.
+        if user.id not in game["players"]:
+            await query.answer("Ты ещё не присоединился(-ась) к игре.", show_alert=True)
+            return
+        player = game["players"][user.id]
+        card = ACTION_CARDS_BY_ID[player["action_card"]]
+        if not player["alive"]:
+            text = f"{card['name']}\n{card['desc']}\n💀 Ты выбыл(а), карта уже не работает."
+            await query.answer(text=text[:200], show_alert=True)
+            return
+        if player.get("action_used"):
+            text = f"{card['name']}\n{card['desc']}\n✅ Уже использована в этой игре."
+            await query.answer(text=text[:200], show_alert=True)
+            return
+        ok, reason = _check_action_condition(game, card, user.id)
+        await query.answer(text=_action_card_alert(card, ok, reason), show_alert=True)
+
+    elif action == "bu":
+        # Применение карты действия (баф) — реально запускает эффект и тратит карту.
+        # Если карта не требует цели — применяется сразу, иначе бот шлёт в чат отдельное
+        # сообщение с выбором цели (доступное только автору).
         if user.id not in game["players"]:
             await query.answer("Ты ещё не присоединился(-ась) к игре.", show_alert=True)
             return
