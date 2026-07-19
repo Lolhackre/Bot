@@ -1424,6 +1424,11 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text(f"🎙 Генерирую голос {voice_info['label']}...")
     tmp_path = None
 
+    # Куда отправлять готовое голосовое: если команда из ЛС — всегда в основную группу,
+    # если из группы — в тот же чат (реплаем на сообщение отправителя)
+    target_chat_id = config.MAIN_GROUP_CHAT_ID if is_private else update.message.chat_id
+    reply_to = None if is_private else update.message.message_id
+
     try:
         # Используем обычный FishAudio, который точно есть в библиотеке
         client = FishAudio(api_key=config.FISH_API_KEY)
@@ -1442,12 +1447,15 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         with open(tmp_path, 'rb') as voice:
             await context.bot.send_voice(
-                chat_id=update.message.chat_id,
+                chat_id=target_chat_id,
                 voice=voice,
-                reply_to_message_id=update.message.message_id
+                reply_to_message_id=reply_to
             )
         
-        await status_msg.delete()
+        if is_private:
+            await status_msg.edit_text("✅ Отправлено в группу.")
+        else:
+            await status_msg.delete()
 
     except Exception as e:
         await status_msg.edit_text(f"❌ Ошибка при генерации голоса:\n<code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
