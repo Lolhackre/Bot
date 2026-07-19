@@ -824,12 +824,15 @@ def _voting_text(game, alive):
 
 def _voting_keyboard(chat_id, alive):
     game = BUNKER_GAMES[chat_id]
-    # У кого уже есть хотя бы один голос — показываем ✅ вместо ❌ прямо на кнопке,
-    # чтобы было видно с первого взгляда, за кого голосуют, не читая текст выше.
-    voted_for = {t for t in game["votes"].values() if t != "skip"}
+    # Считаем текущее количество голосов за каждого кандидата в этом раунде,
+    # чтобы показать цифру прямо на кнопке вместо статичного крестика.
+    vote_counts = {}
+    for target in game["votes"].values():
+        if target != "skip":
+            vote_counts[target] = vote_counts.get(target, 0) + 1
     buttons = [
         [InlineKeyboardButton(
-            f"{'✅' if uid in voted_for else '❌'} {game['players'][uid]['name']}",
+            f"🗳 {vote_counts.get(uid, 0)} — {game['players'][uid]['name']}",
             callback_data=f"bv:{chat_id}:{uid}"
         )]
         for uid in alive
@@ -1215,7 +1218,8 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
                 await query.answer("Этот игрок уже выбыл из игры.", show_alert=True)
                 return
             game["votes"][user.id] = target_id
-            await query.answer("Голос принят! ✅")
+            target_name = game["players"][target_id]["name"]
+            await query.answer(f"Голос принят! ✅ Ты проголосовал(а) за {target_name}")
 
         alive = game.get("voting_alive") or [uid for uid in game["order"] if game["players"][uid]["alive"]]
         try:
