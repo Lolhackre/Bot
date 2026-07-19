@@ -78,8 +78,8 @@ VOICE_LIBRARY = {
     "лелуш": {"id": "5a0369ed228a4c9d876394dc18e70d71", "label": "лелуш"},
     "аяно": {"id": "b2716eb8c3a14df0bbb4ae5ca4d9d70a", "label": "аяно"},
     "миса": {"id": "1cabd5b59d2c46ae9b52d1d7d6153dff", "label": "миса"},
-    "мелл": {"id": "0a690dbeb3984a9f88cd39353880775f", "label": "мелл"}
-    "зеля": {"id": "5f9e15229e1c4f01a0133ab9f2b69566", "label": "зеля"}
-    "куб": {"id": "2b932e13e5564601a6f5c705cecf36fe", "label": "куб"}
+    "мелл": {"id": "0a690dbeb3984a9f88cd39353880775f", "label": "мелл"},
+    "зеля": {"id": "5f9e15229e1c4f01a0133ab9f2b69566", "label": "зеля"},
+    "куб": {"id": "2b932e13e5564601a6f5c705cecf36fe", "label": "куб"},
 }
 DEFAULT_VOICE_KEY = "хоум"
