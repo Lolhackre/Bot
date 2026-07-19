@@ -1,13 +1,3 @@
-"""
-extra_features.py
-------------------
-Дополнительные "приколюхи" для чата, НЕ связанные с явкой/прогулками:
-  1. Пасхалки с редким шансом (текст или голос)
-  2. Еженедельная летопись чата в архаичном стиле
-  3. !суд <реплай> [причина] — шуточный суд с голосовым приговором
-  4. Слово дня с подставой + отслеживание, кто первым его употребил
-
-
 import random
 import re
 import sys
@@ -27,9 +17,6 @@ from fishaudio import FishAudio
 from fishaudio.utils import save
 
 
-# ==========================================================
-# ИНИЦИАЛИЗАЦИЯ БД (вызвать один раз при старте, из main())
-# ==========================================================
 def init_extra_features_db():
     with sqlite3.connect(config.DB_PATH) as conn:
         conn.execute("""
@@ -67,15 +54,12 @@ def _format_link(user_id, username, full_name):
     return f'<a href="tg://user?id={user_id}">{display_name}</a>'
 
 
-# ==========================================================
-# 1. ПАСХАЛКИ С РЕДКИМ ШАНСОМ
-# ==========================================================
-EGG_CHANCE = 350  # примерно 1 из 350 сообщений
+EGG_CHANCE = 350
 
 EGG_TEXT_REACTIONS = [
-    "🎉 Оу, редкий момент! Ты — счастливчик дня.",
+    "🎉 Оу, редкий момент! Ты - счастливчик дня.",
     "✨ Система засекла аномалию. Поздравляю, это было красиво.",
-    "🍀 Одно из ~350 сообщений — именно твоё. Не знаю зачем, но держи это знание.",
+    "🍀 Одно из ~350 сообщений - именно твоё. Не знаю зачем, но держи это знание.",
     "🎰 Джекпот! Правда бесполезный, но джекпот.",
     "🌟 Ты только что поймал(а) невидимую звезду. Никто, кроме бота, этого не видел.",
     "🔮 Вселенная моргнула именно на этом сообщении.",
@@ -87,7 +71,7 @@ EGG_VOICE_PHRASES = [
     "Ого. Редкий момент. Наслаждайся.",
     "Поздравляю, ты поймал редкость.",
     "Система отметила именно это сообщение.",
-    "Ты выиграл в лотерею, приз — ничего.",
+    "Ты выиграл в лотерею, приз - ничего.",
 ]
 
 
@@ -113,7 +97,6 @@ async def _trigger_easter_egg(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         print(f"[EGG DB ERROR] {e}", file=sys.stderr)
 
-    # 25% случаев — голосом (дороже по ресурсам), остальное — текстом
     if random.random() < 0.25:
         phrase = random.choice(EGG_VOICE_PHRASES)
         voice_key = random.choice(list(config.VOICE_LIBRARY.keys()))
@@ -146,7 +129,6 @@ async def _trigger_easter_egg(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def command_egg_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """!редкости — топ по пойманным пасхалкам"""
     if str(update.message.chat_id) != str(config.MAIN_GROUP_CHAT_ID):
         return
     try:
@@ -165,14 +147,11 @@ async def command_egg_leaderboard(update: Update, context: ContextTypes.DEFAULT_
     text = "🍀 <b>Топ ловцов редких моментов</b>\n\n"
     for i, (uid, uname, fname, catches) in enumerate(rows, start=1):
         link = _format_link(uid, uname, fname)
-        text += f"{i}. {link} — {catches}\n"
+        text += f"{i}. {link} - {catches}\n"
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
-# ==========================================================
-# 2. ЛЕТОПИСЬ ЧАТА (еженедельная, в архаичном стиле)
-# ==========================================================
-CHRONICLE_KEEP_DAYS = 14  # сколько дней хранить сообщения в логе
+CHRONICLE_KEEP_DAYS = 14
 
 CHRONICLE_INTRO = [
     "📜 <b>ЛЕТОПИСЬ ЧАТА</b>\nВ лето 2026-е, седмицу минувшую, писано было следующее...\n",
@@ -242,17 +221,14 @@ async def weekly_chronicle_job(context: ContextTypes.DEFAULT_TYPE):
         print(f"[CHRONICLE ERROR] {e}", file=sys.stderr)
 
 
-# ==========================================================
-# 3. ГОЛОСОВОЙ "СУД"
-# ==========================================================
 COURT_ARTICLES = [
-    "ст. 1 Устава Чата — злостное игнорирование опроса",
-    "ст. 2 Устава Чата — наглое опоздание на прогулку",
-    "ст. 3 Устава Чата — распространение сомнительных шуток",
-    "ст. 4 Устава Чата — подозрительная тишина в важный момент",
-    "ст. 5 Устава Чата — публичное употребление капслока без повода",
-    "ст. 6 Устава Чата — систематическое «щас выйду» без выхода",
-    "ст. 7 Устава Чата — незаконное присвоение звания балабола",
+    "ст. 1 Устава Чата - злостное игнорирование опроса",
+    "ст. 2 Устава Чата - наглое опоздание на прогулку",
+    "ст. 3 Устава Чата - распространение сомнительных шуток",
+    "ст. 4 Устава Чата - подозрительная тишина в важный момент",
+    "ст. 5 Устава Чата - публичное употребление капслока без повода",
+    "ст. 6 Устава Чата - систематическое «щас выйду» без выхода",
+    "ст. 7 Устава Чата - незаконное присвоение звания балабола",
 ]
 
 COURT_SENTENCES = [
@@ -273,7 +249,6 @@ DEFAULT_COURT_REASONS = [
 
 
 async def command_court(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """!суд (в ответ на сообщение) [причина] — шуточный суд с голосовым приговором"""
     message = update.message
 
     if not message.reply_to_message:
@@ -303,7 +278,6 @@ async def command_court(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await message.reply_text(verdict_text, parse_mode=ParseMode.HTML)
 
-    # Голосовой приговор через уже существующую библиотеку голосов
     voice_key = config.DEFAULT_VOICE_KEY
     voice_info = config.VOICE_LIBRARY[voice_key]
     speech_text = f"Именем чата. Обвиняется {target.full_name or target.username}. Статья: {article}. Приговор: {sentence}."
@@ -331,9 +305,6 @@ async def command_court(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
-# ==========================================================
-# 4. СЛОВО ДНЯ С ПОДСТАВОЙ
-# ==========================================================
 WORD_OF_DAY_LIST = [
     ("залипундель", "состояние, когда открыл чат и забыл зачем"),
     ("отгуляйсь", "вежливая форма отказа идти на прогулку"),
@@ -386,8 +357,8 @@ async def post_word_of_day(context: ContextTypes.DEFAULT_TYPE):
         await asyncio.to_thread(_set_word_of_day, word, definition)
         text = (
             f"📖 <b>СЛОВО ДНЯ</b>\n\n"
-            f"«<b>{escape(word)}</b>» — {escape(definition)}\n\n"
-            f"Кто первый употребит это слово в чате сегодня — получит титул «Словотворец дня» 🏆"
+            f"«<b>{escape(word)}</b>» - {escape(definition)}\n\n"
+            f"Кто первый употребит это слово в чате сегодня - получит титул «Словотворец дня» 🏆"
         )
         await context.bot.send_message(
             chat_id=config.MAIN_GROUP_CHAT_ID,
@@ -415,7 +386,7 @@ async def _check_word_of_day_usage(update: Update, context: ContextTypes.DEFAULT
         return
     today = datetime.now().strftime("%Y-%m-%d")
     if date != today:
-        return  # слово вчерашнее, новое ещё не постили
+        return
 
     if not re.search(rf"\b{re.escape(word)}\b", text, re.IGNORECASE):
         return
@@ -430,16 +401,11 @@ async def _check_word_of_day_usage(update: Update, context: ContextTypes.DEFAULT
     if changed:
         link = _format_link(user.id, user.username, user.full_name)
         await message.reply_text(
-            f"🏆 {link} первым употребил(а) слово дня «{escape(word)}»! Официально — Словотворец дня 🎉",
+            f"🏆 {link} первым употребил(а) слово дня «{escape(word)}»! Официально - Словотворец дня 🎉",
             parse_mode=ParseMode.HTML
         )
 
 
-# ==========================================================
-# ЕДИНЫЙ "ФОНОВЫЙ" ОБРАБОТЧИК
-# (объединяет летопись + слово дня + пасхалку в один MessageHandler,
-#  чтобы не плодить лишние регистрации; команды "!", "+", "/" не трогает)
-# ==========================================================
 async def extra_features_passive_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message or not message.text:
@@ -447,66 +413,19 @@ async def extra_features_passive_handler(update: Update, context: ContextTypes.D
 
     text = message.text.strip()
     if text.startswith("!") or text.startswith("+") or text.startswith("/"):
-        return  # команды не трогаем — только органический чат
+        return
 
     user = update.effective_user
     if user is None or user.is_bot:
         return
 
-    # 1. Логируем сообщение для летописи (не слишком короткое/длинное)
     if 8 <= len(text) <= 300:
         try:
             await asyncio.to_thread(_log_message_for_chronicle, user.id, user.username, user.full_name, text)
         except Exception as e:
             print(f"[CHRONICLE LOG ERROR] {e}", file=sys.stderr)
 
-    # 2. Проверка слова дня
     await _check_word_of_day_usage(update, context)
 
-    # 3. Пасхалка (редкий шанс)
     if random.randint(1, EGG_CHANCE) == 1:
         await _trigger_easter_egg(update, context)
-
-
-# ==========================================================
-# ЧТО ДОБАВИТЬ В main.py, ЧТОБЫ ВКЛЮЧИТЬ ЭТИ ФИЧИ
-# (ничего из существующего кода менять не нужно — только добавить)
-# ==========================================================
-#
-# 1) В блок импортов добавить:
-#     import extra_features
-#
-# 2) В функции main(), сразу после db_init() и init_votes_tracking(), добавить:
-#     extra_features.init_extra_features_db()
-#
-# 3) Там же, среди регистрации хендлеров, добавить (можно в любом месте после
-#    app = Application.builder()...build()):
-#
-#     app.add_handler(
-#         MessageHandler(filters.TEXT & filters.ChatType.GROUPS & ~filters.UpdateType.EDITED,
-#                         extra_features.extra_features_passive_handler),
-#         group=10
-#     )
-#     app.add_handler(
-#         MessageHandler(filters.Regex(r'(?i)^!суд(\s|$)') & filters.ChatType.GROUPS,
-#                         extra_features.command_court),
-#         group=11
-#     )
-#     app.add_handler(
-#         MessageHandler(filters.Regex(r'(?i)^!редкости(\s|$)') & filters.ChatType.GROUPS,
-#                         extra_features.command_egg_leaderboard),
-#         group=12
-#     )
-#
-#    (группы 10-12 выбраны специально "подальше" от твоих существующих 0-1,
-#     чтобы гарантированно не конфликтовать с !-диспетчером и режимом "Стоп Срач")
-#
-# 4) В блоке jq.run_daily(...) добавить две новые задачи:
-#
-#     jq.run_daily(extra_features.weekly_chronicle_job,
-#                  time=dtime(hour=21, minute=0, tzinfo=config.KYIV_TZ),
-#                  days=(6,))  # воскресенье
-#     jq.run_daily(extra_features.post_word_of_day,
-#                  time=dtime(hour=12, minute=0, tzinfo=config.KYIV_TZ))
-#
-# Больше НИЧЕГО менять не нужно — твой существующий код остаётся как есть.
