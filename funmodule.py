@@ -8,13 +8,13 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from html import escape
-from database import db_get_user_rank, db_get_command_rank, db_get_nickname
-
+from database import db_get_user_rank, db_get_command_rank, db_get_nickname, db_get_random_active_user
+ 
 def _format_user_link(user_id, username, full_name):
     nickname = db_get_nickname(user_id)
     display_name = escape(nickname or full_name or username or str(user_id))
     return f'<a href="tg://user?id={user_id}">{display_name}</a>'
-
+ 
 # Действия, которые можно применить к участнику ответом на его сообщение.
 # Формат: "ключ": (эмодзи, глагол). Ключ используется и как "!ключ", и как обычное слово-ответ (без "!").
 ACTIONS = {
@@ -83,7 +83,7 @@ ACTIONS = {
     "прижать стенке": ("🫦", "прижал(а) к стенке"),
     "погладить жопу": ("🖐️", "погладил(а) по жопе"),
     "укусить ухо": ("🦷", "укусил(а) за ушко"),
-
+ 
     # 18+ действия
     "отшлепать": ("🔥", "хорошенько отшлёпал(а)"),
     "трахнуть": ("🍆", "жёстко выебал(а)"),
@@ -135,12 +135,12 @@ ACTIONS = {
     "сквирт": ("💦", "заставил(а) сквиртить"),
     # Добавь ещё столько, сколько нужно — я могу дать ещё 100
 }
-
+ 
 async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action_key: str, target=None):
     """Обрабатывает действие одного участника к другому."""
     actor = update.effective_user
     message = update.message
-
+ 
     # 1. Быстро определяем цель (target)
     if target:
         target_id, target_username, target_full_name = target
@@ -153,9 +153,9 @@ async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, act
     else:
         await message.reply_text("⚠️ Ответьте этой командой на сообщение того, к кому хотите применить действие, или укажите @username/ID.")
         return
-
+ 
     emoji, verb = ACTIONS[action_key]
-
+ 
     # 2. Оптимизация генерации ссылок
     # Если твоя функция _format_user_link просто делала HTML-ссылку, 
     # лучше юзать встроенный mention_html — он быстрее и безопаснее (сам экранирует имена)
@@ -167,16 +167,16 @@ async def command_action(update: Update, context: ContextTypes.DEFAULT_TYPE, act
     # Если у пользователя нет юзернейма и это не реплай, mention_html по id сделает ссылку tg://user?id=...
     # Для этого передаем имя внутрь. Если в _format_user_link была другая логика — верни её обратно.
     target_link = _format_user_link(user_id=target_id, username=target_username, full_name=target_full_name)
-
+ 
     # 3. Формируем финальный текст через тернарный оператор
     is_self = target_id == actor.id
     text = (
         f"{emoji} {actor_link} {verb} самого себя. Ситуация..." if is_self 
         else f"{emoji} {actor_link} {verb} {target_link}!"
     )
-
+ 
     await message.reply_text(text, parse_mode=ParseMode.HTML)
-
+ 
 # Расширенный список мемных, кринжовых и жестких отмазок (с матами)
 EXCUSES = [
     # --- Абсурд и Кринж (Старые + Новые) ---
@@ -230,7 +230,7 @@ EXCUSES = [
     "Ебать, у меня на балконе голуби устроили стрелку, я назначен судьей, не могу бросить пацанов.",
     "Я случайно стёр свои брови, когда вытирал пот со лба. Теперь я похож на злого пришельца, сижу боюсь.",
     "Бля, я съел шаурму и во мне проснулся древний вулкан, если я выйду — пострадают невинные люди.",
-
+ 
     # --- Продолжение (51-100) Гейминг, Аниме, Постирония ---
     "Какая улица, бля? У меня в майнкрафте корова рожает, я акушер, я нужен семье!",
     "Я скачал геншин и мне выпала лоли-девочка, теперь я должен качать ей таланты 20 часов подряд.",
@@ -282,7 +282,7 @@ EXCUSES = [
     "Я не приду, потому что я стесняюсь своей левой ноздри, она сегодня шире, чем правая.",
     "Бля, я застрял в мыслях о том, почему у птиц нет рук. Это взрывает мне мозг уже три часа.",
     "Да ну нахуй, я съел три пачки сухариков со вкусом хрена и теперь у меня изо рта пахнет как из могилы деда.",
-
+ 
     # --- Продолжение (101-150) Адовый Поток Сознания ---
     "Сука, я зашел на сайт Госуслуг и у меня поднялось давление от одного вида интерфейса.",
     "Я хотел выйти, но вспомнил, что не досмотрел видео '10 часов тишины, прерываемой звуками пердежа'. Это важно.",
@@ -334,7 +334,7 @@ EXCUSES = [
     "Бля, я зашел на сайт с мемчиками и потерял связь с реальностью. Кто я? Где я?",
     "Какое гулять, ебать? Я купил арбуз и планирую съесть его в один хавальник, не отходя от толчка.",
     "Сука, я забыл пароль от своего телефона и теперь сижу плачу, потому что не могу посмотреть тикток.",
-
+ 
     # --- Финальный Аккорд (151-200) Максимальный Разнос ---
     "Бля, у меня в комнате такое сильное эхо от моего одиночества, что я боюсь пукнуть — оглохну.",
     "Да ну в пизду, я посмотрел на свои фотографии в паспорте и понял, что я международный преступник.",
@@ -388,11 +388,11 @@ EXCUSES = [
     "Бля, пацаны, извините, я обосрался. Физически. Никуда не иду."
     "Я конченое чмо, кончил себе на лицо, сильно утомился и больше не зочу гулять, а ещё я жду сперму на лице от стекловаты"
 ]
-
+ 
 # Словарь для хранения кулдаунов {user_id: datetime_next_allowed}
 COOLDOWN_TIME = timedelta(hours=4)
-
-
+ 
+ 
 async def command_excuse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Быстрая проверка чата (сравниваем как строки или инты одинаково)
     if str(update.message.chat_id) != str(config.MAIN_GROUP_CHAT_ID):
@@ -401,7 +401,7 @@ async def command_excuse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     now = datetime.now()
-
+ 
     # 2. ОПТИМИЗАЦИЯ БД: Выносим чтение рангов в потоки, чтобы не фризить бота
     is_creator = (user_id == 8049751536)
     
@@ -411,7 +411,7 @@ async def command_excuse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Ошибка при чтении рангов из БД: {e}", file=sys.stderr)
         return
-
+ 
     if not is_creator and current_rank < min_rank:
         await update.message.reply_text("⛔ <b>Недостаточно прав для этой команды.</b>", parse_mode=ParseMode.HTML)
         return
@@ -444,7 +444,7 @@ async def command_excuse(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
         return
-
+ 
     # 4. ВИЗУАЛ: Генерируем сочную отмазку
     random_excuse = random.choice(EXCUSES)
     
@@ -465,8 +465,8 @@ async def command_excuse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Вешаем кулдаун
     cooldowns[user_id] = now + COOLDOWN_TIME
-
-
+ 
+ 
 QUOTES = [
     "Жизнь — как туалетная бумага: или кончается в самый неподходящий момент, или слишком много.",
     "Отпускайте идиотов из своей жизни. Цирк должен гастролировать.",
@@ -744,51 +744,49 @@ QUOTES = [
     "Я не ревную, я защищаю.",
 ]
 
-# (остальной код файла остаётся без изменений)
-
 QUOTE_COOLDOWN_TIME = timedelta(hours=4)
-
-
+ 
+ 
 async def command_quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != str(config.MAIN_GROUP_CHAT_ID):
         return
-
+ 
     user = update.effective_user
     user_id = user.id
     now = datetime.now()
-
+ 
     is_creator = (user_id == 8049751536)
-
+ 
     try:
         current_rank = await asyncio.to_thread(db_get_user_rank, user_id)
         min_rank = await asyncio.to_thread(db_get_command_rank, "цитата")
     except Exception as e:
         print(f"Ошибка при чтении рангов из БД: {e}", file=sys.stderr)
         return
-
+ 
     if not is_creator and current_rank < min_rank:
         await update.message.reply_text("⛔ <b>Недостаточно прав для этой команды.</b>", parse_mode=ParseMode.HTML)
         return
-
+ 
     if "quote_cooldowns" not in context.bot_data:
         context.bot_data["quote_cooldowns"] = {}
-
+ 
     cooldowns = context.bot_data["quote_cooldowns"]
-
+ 
     if user_id in cooldowns and now < cooldowns[user_id]:
         remaining = cooldowns[user_id] - now
         total_seconds = int(remaining.total_seconds())
-
+ 
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
-
+ 
         if hours > 0:
             time_str = f"⏳ <b>{hours} ч. {minutes} мин.</b>"
         elif minutes > 0:
             time_str = f"⏳ <b>{minutes} мин. {seconds} сек.</b>"
         else:
             time_str = f"⏳ <b>{seconds} сек.</b>"
-
+ 
         await update.message.reply_text(
             f"🛑 <b>Кулдаун!</b>\n\n"
             f"Слышь, {user.mention_html(user.first_name)}, мудрость не выдаётся оптом.\n"
@@ -796,25 +794,25 @@ async def command_quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
         return
-
+ 
     random_quote = random.choice(QUOTES)
     user_mention = user.mention_html(user.full_name or user.username)
-
+ 
     response_text = (
         f"────────────────────\n"
         f"📜 <b>Цитата дня для </b> {user_mention}<b>:</b>\n"
         f"<blockquote><i>«{escape(random_quote)}»</i></blockquote>\n"
         f"────────────────────\n"
     )
-
+ 
     await update.message.reply_text(
         text=response_text,
         parse_mode=ParseMode.HTML
     )
-
+ 
     cooldowns[user_id] = now + QUOTE_COOLDOWN_TIME
-
-
+ 
+ 
 def db_get_balabol_and_silent():
     """Собираем данные из БД в один быстрый синхронный заход"""
     with sqlite3.connect(config.DB_PATH) as conn:
@@ -839,14 +837,14 @@ def db_get_balabol_and_silent():
         silent_row = cur_silent.fetchone()
         
         return balabol_row, silent_row
-
+ 
 def db_reset_daily_counters():
     """Сбрасываем счетчики отдельной быстрой транзакцией"""
     with sqlite3.connect(config.DB_PATH) as conn:
         conn.execute("UPDATE users SET daily_messages_count = 0")
         conn.commit()
-
-
+ 
+ 
 async def daily_balabol_check(context: ContextTypes.DEFAULT_TYPE):
     try:
         # Шаг 1: Быстро забираем данные из БД в отдельном потоке (база сразу освобождается)
@@ -854,7 +852,7 @@ async def daily_balabol_check(context: ContextTypes.DEFAULT_TYPE):
         
         if not balabol_row and not silent_row:
             return
-
+ 
         # Шаг 2: Формируем текст
         text = "🏆 <b>ИТОГИ ДНЯ: РЕЙТИНГ АКТИВНОСТИ</b> 🏆\n\n"
         
@@ -869,7 +867,7 @@ async def daily_balabol_check(context: ContextTypes.DEFAULT_TYPE):
             text += f"🤫 <b>Молчун дня:</b> {s_name}\n🤐 Не проронил ни слова. Партизан года!\n\n"
             
         text += "🏅 Эти шуточные звания закреплены в топе до завтрашнего вечера!"
-
+ 
         # Шаг 3: Отправляем в Telegram (база в это время отдыхает и доступна для других тасок)
         msg = await context.bot.send_message(
             chat_id=config.MAIN_GROUP_CHAT_ID,
@@ -880,6 +878,128 @@ async def daily_balabol_check(context: ContextTypes.DEFAULT_TYPE):
             
         # Шаг 4: Быстро сбрасываем суточные счетчики в БД
         await asyncio.to_thread(db_reset_daily_counters)
-
+ 
     except Exception as e:
         print(f"Ошибка в daily_balabol_check: {e}", file=sys.stderr)
+ 
+ 
+# ---------- !совместимость ----------
+COMPATIBILITY_COMMENTS = [
+    (0, 20, "😬 Ну... бывает и хуже. Наверное."),
+    (20, 40, "🤔 Есть над чем работать."),
+    (40, 60, "🙂 Вполне неплохо, можно дружить."),
+    (60, 80, "😄 О, тут реально что-то есть!"),
+    (80, 95, "🔥 Практически родственные души!"),
+    (95, 101, "💯 Идеальное совпадение, это судьба!"),
+]
+ 
+def _compatibility_comment(percent):
+    for low, high, comment in COMPATIBILITY_COMMENTS:
+        if low <= percent < high:
+            return comment
+    return COMPATIBILITY_COMMENTS[-1][2]
+ 
+async def command_compatibility(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.message.chat_id) != str(config.MAIN_GROUP_CHAT_ID):
+        return
+ 
+    user = update.effective_user
+    is_creator = (user.id == 8049751536)
+ 
+    try:
+        current_rank = await asyncio.to_thread(db_get_user_rank, user.id)
+        min_rank = await asyncio.to_thread(db_get_command_rank, "совместимость")
+    except Exception as e:
+        print(f"Ошибка при чтении рангов из БД: {e}", file=sys.stderr)
+        return
+ 
+    if not is_creator and current_rank < min_rank:
+        await update.message.reply_text("⛔ <b>Недостаточно прав для этой команды.</b>", parse_mode=ParseMode.HTML)
+        return
+ 
+    if not update.message.reply_to_message:
+        await update.message.reply_text("⚠️ Ответьте этой командой на сообщение того, с кем хотите проверить совместимость.")
+        return
+ 
+    target_user = update.message.reply_to_message.from_user
+    if target_user.is_bot:
+        await update.message.reply_text("🤖 С ботами совместимость не считается, у нас тут не свидание.")
+        return
+ 
+    if target_user.id == user.id:
+        await update.message.reply_text("🪞 Совместимость с самим собой — 100%. Ты идеальная пара для себя, поздравляю.")
+        return
+ 
+    # Детерминированный процент — одна и та же пара всегда получает один и тот же результат
+    a, b = sorted([user.id, target_user.id])
+    seed_value = (a * 2654435761 + b) & 0xFFFFFFFF
+    percent = seed_value % 101
+ 
+    actor_link = _format_user_link(user.id, user.username, user.full_name)
+    target_link = _format_user_link(target_user.id, target_user.username, target_user.full_name)
+    comment = _compatibility_comment(percent)
+ 
+    filled = round(percent / 10)
+    bar = "🟩" * filled + "⬜" * (10 - filled)
+ 
+    text = (
+        f"💞 <b>Совместимость</b>\n"
+        f"{actor_link} + {target_link}\n\n"
+        f"{bar} <b>{percent}%</b>\n"
+        f"{comment}"
+    )
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+ 
+ 
+# ---------- !кто из нас [прилагательное] ----------
+WHO_OF_US_TEMPLATES = [
+    "🏆 Титул «Самый {adj} в чате» уходит к {name}!",
+    "🎖 По итогам тайного голосования небес, самый {adj} тут — {name}.",
+    "🔮 Магический шар указал на {name}. Официально: самый {adj}.",
+    "📢 Внимание! Самым {adj} в этом чате признан(а) {name}!",
+]
+ 
+async def command_who_of_us(update: Update, context: ContextTypes.DEFAULT_TYPE, adjective: str):
+    if str(update.message.chat_id) != str(config.MAIN_GROUP_CHAT_ID):
+        return
+ 
+    user = update.effective_user
+    is_creator = (user.id == 8049751536)
+ 
+    try:
+        current_rank = await asyncio.to_thread(db_get_user_rank, user.id)
+        min_rank = await asyncio.to_thread(db_get_command_rank, "кто_из_нас")
+    except Exception as e:
+        print(f"Ошибка при чтении рангов из БД: {e}", file=sys.stderr)
+        return
+ 
+    if not is_creator and current_rank < min_rank:
+        await update.message.reply_text("⛔ <b>Недостаточно прав для этой команды.</b>", parse_mode=ParseMode.HTML)
+        return
+ 
+    adjective = adjective.strip()
+    if not adjective:
+        await update.message.reply_text("⚠️ Укажи прилагательное. Пример: <code>!кто из нас ленивый</code>", parse_mode=ParseMode.HTML)
+        return
+ 
+    if len(adjective) > 40:
+        await update.message.reply_text("⚠️ Слишком длинное прилагательное, покороче давай.")
+        return
+ 
+    try:
+        winner = await asyncio.to_thread(db_get_random_active_user)
+    except Exception as e:
+        print(f"Ошибка при выборе случайного участника: {e}", file=sys.stderr)
+        return
+ 
+    if not winner:
+        await update.message.reply_text("😶 В базе пока нет активных участников для розыгрыша.")
+        return
+ 
+    w_id, w_username, w_full_name = winner
+    winner_link = _format_user_link(w_id, w_username, w_full_name)
+ 
+    template = random.choice(WHO_OF_US_TEMPLATES)
+    text = template.format(adj=escape(adjective), name=winner_link)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+ 
