@@ -7,6 +7,7 @@ from html import escape
 import funmodule
 import bunker_and_agent
 import extra_features
+import mafia
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -469,6 +470,9 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "☢️ <b>Игра «Бункер»:</b>\n"
             "🚪 <code>!бункер [число выживших]</code> — Создать лобби игры (минимум 4 игрока).\n"
             "🛑 <code>!бункер стоп</code> — Остановить текущую игру (создатель лобби или админ).\n"
+            "🔪 <code>!мафия</code> — Создать лобби игры Мафия (минимум 4 игрока).\n"
+            "🎭 <code>!роль</code> — Посмотреть свою роль в текущей игре Мафия.\n"
+            "🛑 <code>!мафия стоп</code> — Остановить текущую игру в Мафию (создатель лобби или админ).\n"
             "🎴 <code>!карта</code> — Прислать заново кнопки своих карт (можно в любой момент игры, не только в начале).\n\n"
             "⚖️ <code>!суд</code> [причина] — Ответом на сообщение участника устроить шуточный суд чата (с приговором и голосовым оглашением).\n"
         )
@@ -989,6 +993,26 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if text.startswith("!бункер"):
         await bunker_and_agent.command_bunker_start(update, context)
+        return
+
+    if text in ("!роль", "!моя роль"):
+        await mafia.command_mafia_role(update, context)
+        return
+
+    if text.startswith("!мафия стоп") or text.startswith("!мафия отмена"):
+        game = mafia.MAFIA_GAMES.get(update.message.chat_id)
+        if not game:
+            await update.message.reply_text("ℹ️ В этом чате сейчас нет активной игры в Мафию.")
+            return
+        if not is_creator and current_rank < 6 and user_id != game["host_id"]:
+            await update.message.reply_text("⛔ Остановить игру может только создатель лобби или админ.")
+            return
+        del mafia.MAFIA_GAMES[update.message.chat_id]
+        await update.message.reply_text("🛑 Игра в Мафию остановлена.")
+        return
+
+    if text.startswith("!мафия"):
+        await mafia.command_mafia_start(update, context)
         return
 
     if text.startswith("!войс") or text.startswith("/войс") or text.startswith("!voic") or text.startswith("/voic"):
@@ -1664,6 +1688,7 @@ def main():
     # Кнопки игры "Бункер" (bj/bs/bv) должны быть доступны ВСЕМ игрокам, а не только рангу 6+,
     # поэтому регистрируем их ПЕРЕД общим handle_callback_query (внутри группы срабатывает первый совпавший хэндлер)
     app.add_handler(CallbackQueryHandler(bunker_and_agent.handle_bunker_callback, pattern=r"^(bj|bs|bv|bc|ba|bu|bt|bf|bg):"))
+    app.add_handler(CallbackQueryHandler(mafia.handle_mafia_callback, pattern=r"^(mj|ms|mr|mk|md|mc|mv):"))
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
 
