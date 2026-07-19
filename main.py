@@ -6,6 +6,7 @@ from html import escape
 
 import funmodule
 import bunker_and_agent
+import extra_features
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -468,6 +469,8 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "☢️ <b>Игра «Бункер»:</b>\n"
             "🚪 <code>!бункер [число выживших]</code> — Создать лобби игры (минимум 4 игрока).\n"
             "🛑 <code>!бункер стоп</code> — Остановить текущую игру (создатель лобби или админ).\n"
+            "🎴 <code>!карта</code> — Прислать заново кнопки своих карт (можно в любой момент игры, не только в начале).\n\n"
+            "⚖️ <code>!суд</code> [причина] — Ответом на сообщение участника устроить шуточный суд чата (с приговором и голосовым оглашением).\n"
         )
 
         if is_creator or current_rank >= cmd_ranks.get("действие", 0):
@@ -906,6 +909,14 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if text == "!совместимость":
         await funmodule.command_compatibility(update, context)
+        return
+
+    if text.startswith("!суд"):
+        await extra_features.command_court(update, context)
+        return
+
+    if text in ("!карта", "!карты"):
+        await bunker_and_agent.command_bunker_cards(update, context)
         return
 
     if text.startswith("!кто из нас"):
@@ -1621,6 +1632,7 @@ def main():
     db_init()
     init_votes_tracking()
     bunker_and_agent.init_agent_db()
+    extra_features.init_extra_features_db()
     app = Application.builder().token(config.TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
