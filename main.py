@@ -1407,7 +1407,8 @@ async def command_voic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audio = await asyncio.to_thread(
             client.tts.convert,
             text=text,
-            reference_id=config.HOMELANDER_VOICE_ID
+            reference_id=config.HOMELANDER_VOICE_ID,
+            model="s2.1-pro-free"
         )
         
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
