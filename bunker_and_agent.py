@@ -214,8 +214,31 @@ def _lobby_text(game):
 def _lobby_keyboard(chat_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🚪 Присоединиться", callback_data=f"bj:{chat_id}")],
+        [InlineKeyboardButton("🔍 Моя карта", callback_data=f"bc:{chat_id}")],
         [InlineKeyboardButton("▶️ Начать игру", callback_data=f"bs:{chat_id}")],
     ])
+
+
+CARD_ALERT_LABELS = [
+    ("🎂", "Возраст"),
+    ("💼", "Профессия"),
+    ("❤️", "Здоровье"),
+    ("🎯", "Хобби"),
+    ("😱", "Фобия"),
+    ("🎒", "Багаж"),
+    ("📌", "Факт"),
+]
+
+
+def _private_card_text(card):
+    """Собирает текст карты для приватного алерта (видно только нажавшему кнопку).
+    Алерты Telegram ограничены 200 символами, поэтому подписи — эмодзи,
+    а на крайний случай есть безопасная обрезка."""
+    lines = [f"{emoji} {card[key]}" for emoji, key in CARD_ALERT_LABELS]
+    text = "\n".join(lines)
+    if len(text) > 200:
+        text = text[:197] + "..."
+    return text
 
 
 async def command_bunker_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -316,6 +339,7 @@ def _voting_keyboard(chat_id, alive):
         for uid in alive
     ]
     buttons.append([InlineKeyboardButton("⏭ Пропустить голос", callback_data=f"bv:{chat_id}:skip")])
+    buttons.append([InlineKeyboardButton("🔍 Моя карта", callback_data=f"bc:{chat_id}")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -419,6 +443,14 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
     game = BUNKER_GAMES.get(chat_id)
     if not game or game["phase"] == "finished":
         await query.answer("Игра не найдена или уже завершена.", show_alert=True)
+        return
+
+    if action == "bc":
+        if user.id not in game["players"]:
+            await query.answer("Ты ещё не присоединился(-ась) к игре.", show_alert=True)
+            return
+        card = game["players"][user.id]["card"]
+        await query.answer(text=_private_card_text(card), show_alert=True)
         return
 
     if action == "bj":
