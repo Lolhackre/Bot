@@ -131,6 +131,13 @@ PROFESSIONS = [
     "Психолог", "Военный снайпер", "Фермер", "Ветеринар", "Инженер-строитель",
     "Диджей", "Пожарный", "Биолог", "Дальнобойщик", "Стоматолог",
     "Сантехник", "Актёр", "Полицейский", "Пилот", "Журналист",
+    "Учитель начальных классов", "Юрист", "Бухгалтер", "Архитектор", "Химик",
+    "Механик", "Швея", "Парикмахер", "Инженер-электронщик", "Медсестра/медбрат",
+    "Айтишник-безопасник", "Военный врач", "Егерь", "Пчеловод", "Кузнец",
+    "Сапёр", "Спасатель МЧС", "Учёный-физик", "Психиатр", "Тренер по борьбе",
+    "Программист-фрилансер", "Повар-кондитер", "Таксист", "Столяр", "Метеоролог",
+    "Ветеринарный хирург", "Оружейник", "Инженер-эколог", "Радиотехник", "Массажист",
+    "Агроном", "Судья", "Многодетный родитель в декрете", "Священник", "Логист",
 ]
 
 HEALTH = [
@@ -138,6 +145,12 @@ HEALTH = [
     "Хронический насморк", "Бессонница", "Слабое сердце", "Диабет 2 типа",
     "Мигрени", "Проблемы со спиной", "Лёгкая клаустрофобия",
     "Отличная физическая форма", "Пищевая аллергия", "Плоскостопие", "Хороший иммунитет",
+    "Гипертония", "Хронический бронхит", "Артрит", "Эпилепсия (под контролем)", "Варикоз",
+    "Аллергия на пыльцу", "Слабый слух на одно ухо", "Протез ноги, но в отличной форме",
+    "Психосоматические боли на нервной почве", "Железное здоровье, ни разу не болел(а)",
+    "Хроническая усталость", "Непереносимость лактозы", "Лёгкая форма дальтонизма",
+    "Проблемы с щитовидкой", "Панические атаки", "Беременность (второй триместр)",
+    "Инвалидность по слуху, читает по губам", "Хронический гастрит", "Астигматизм",
 ]
 
 HOBBIES = [
@@ -145,6 +158,11 @@ HOBBIES = [
     "Шахматы", "Выращивание растений", "Кулинария", "Рисование",
     "Бег на длинные дистанции", "Ремонт техники", "Чтение",
     "Настольные игры", "Фотография", "Вязание",
+    "Скалолазание", "Пение в хоре", "Резьба по дереву", "Астрономия",
+    "Коллекционирование марок", "Бокс", "Танцы", "Пивоварение", "Верховая езда",
+    "Стрельба из лука", "Разведение аквариумных рыбок", "Гончарное дело",
+    "Ведение блога", "Настольный теннис", "Дайвинг", "Оригами", "Гейминг",
+    "Реставрация мебели", "Игра на барабанах", "Собирание грибов",
 ]
 
 PHOBIAS = [
@@ -152,6 +170,10 @@ PHOBIAS = [
     "Боязнь пауков", "Боязнь толпы", "Боязнь глубокой воды",
     "Боязнь микробов", "Боязнь одиночества", "Боязнь громких звуков",
     "Нет явных фобий", "Боязнь огня", "Боязнь птиц",
+    "Боязнь змей", "Боязнь крови", "Боязнь публичных выступлений",
+    "Боязнь острых предметов", "Боязнь собак", "Боязнь полётов",
+    "Боязнь зеркал", "Боязнь клоунов", "Боязнь грозы", "Боязнь смерти",
+    "Боязнь дырок (трипофобия)", "Боязнь кукол", "Боязнь тесноты в лифте",
 ]
 
 BAGGAGE = [
@@ -159,6 +181,12 @@ BAGGAGE = [
     "Рация", "Гитара", "Запас питьевой воды", "Набор инструментов",
     "Книги по выживанию", "Швейная машинка", "Солнечная батарея",
     "Мешок круп", "Оружие для охоты", "Компас и карты",
+    "Спутниковый телефон", "Мотоблок с топливом", "Ящик с лекарствами",
+    "Палатка и спальники", "Набор для очистки воды", "Мешок с удобрениями",
+    "Ноутбук с офлайн-библиотекой", "Швейцарский нож и снаряжение",
+    "Клетка с курами", "Мешок соли", "Ящик с инструментами для стройки",
+    "Портативная газовая плита", "Запасной генератор кислорода",
+    "Ящик консервов", "Ручная мельница для муки", "Аварийный набор инструментов электрика",
 ]
 
 FACTS = [
@@ -167,6 +195,14 @@ FACTS = [
     "Панически боится начальства", "Однажды спас(ла) человека из огня",
     "Никогда не признаёт ошибок", "Уже был(а) в подобной ситуации",
     "Состоит в тайном клубе по интересам",
+    "Бывший военный дезертир", "Тайно пишет книгу", "Считает себя экстрасенсом",
+    "Был(а) свидетелем на громком судебном процессе", "Никогда не спит больше 4 часов",
+    "Разводит опасных насекомых дома", "Имеет судимость за экономическое преступление",
+    "Тайно снимается в любительском кино", "Бывший участник секты",
+    "Знаком(а) с известным политиком", "Панически боится темноты, но скрывает это",
+    "Уже переживал(а) конец света в другом городе (шутка... или нет)",
+    "Тайно ведёт двойную бухгалтерию своей семьи", "Однажды подделал(а) документы",
+    "Помнит наизусть весь Уголовный кодекс",
 ]
 
 CATASTROPHES = [
@@ -175,12 +211,20 @@ CATASTROPHES = [
     "🌋 Серия супервулканических извержений накрыла планету пеплом на годы вперёд.",
     "👽 Инопланетное вторжение вынудило человечество спрятаться под землёй.",
     "🌊 Глобальное наводнение затопило большую часть суши.",
+    "🧊 Внезапный ледниковый период сковал планету льдом за считаные недели.",
+    "🕷 Мутировавшие насекомые-гиганты захватили поверхность.",
+    "🔥 Неконтролируемые пожары выжгли большую часть лесов и городов.",
+    "🛰 Падение крупного астероида вызвало глобальную пылевую зиму.",
+    "🤖 Восстание автоматизированных систем сделало города непригодными для жизни.",
 ]
 
 BUNKER_INFOS = [
     "Бункер рассчитан на ограниченное количество мест и запасов на 5 лет.",
     "В бункере хватит еды и воды на всех, но мест для проживания меньше, чем желающих.",
     "Бункер небольшой, кислорода и провизии хватит только на часть группы.",
+    "В бункере есть автономная ферма, но она прокормит не больше половины желающих.",
+    "Система жизнеобеспечения бункера рассчитана на ограниченное число людей одновременно.",
+    "Бункер многоуровневый, но нижние этажи уже частично затоплены грунтовыми водами.",
 ]
 
 CARD_ORDER = ["Возраст", "Профессия", "Здоровье", "Хобби", "Фобия", "Багаж", "Факт"]
@@ -252,8 +296,108 @@ ACTION_CARDS = [
         "target_required": True,
         "private_result": True,
     },
+    {
+        "id": "swap_health",
+        "name": "🩺 Обмен здоровьем",
+        "desc": "Поменяйся показателем здоровья с любым живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "swap_age",
+        "name": "🎂 Обмен возрастом",
+        "desc": "Поменяйся возрастом с любым живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "swap_phobia",
+        "name": "😱 Обмен фобиями",
+        "desc": "Поменяйся фобией с любым живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "swap_fact",
+        "name": "🕵️ Обмен фактом",
+        "desc": "Поменяйся скрытым фактом о себе с любым живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "gift_baggage",
+        "name": "🎁 Подарок",
+        "desc": "Отдай свой багаж выбранному живому игроку — сам(а) останешься без него.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "mind_read",
+        "name": "🔮 Ясновидение",
+        "desc": "Узнай сразу две случайные нераскрытые характеристики выбранного живого игрока. Результат увидишь только ты.",
+        "condition_type": "max_alive",
+        "max_alive": 5,
+        "condition_desc": "доступно, когда живых участников осталось ≤5",
+        "target_required": True,
+        "private_result": True,
+    },
+    {
+        "id": "confession",
+        "name": "🎤 Чистосердечное признание",
+        "desc": "Добровольно раскрой всем одну свою случайную нераскрытую характеристику.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
+    {
+        "id": "shield_transfer",
+        "name": "🤝 Передача защиты",
+        "desc": "Дай неприкосновенность на этот раунд другому живому игроку (не себе).",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "reroll",
+        "name": "🔄 Реролл",
+        "desc": "Перебрось одну свою случайную ещё не раскрытую характеристику на новую.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
 ]
 ACTION_CARDS_BY_ID = {c["id"]: c for c in ACTION_CARDS}
+
+# Пулы значений для реролла характеристик картой действия "Реролл"
+ATTRIBUTE_POOLS = {
+    "Профессия": PROFESSIONS,
+    "Здоровье": HEALTH,
+    "Хобби": HOBBIES,
+    "Фобия": PHOBIAS,
+    "Багаж": BAGGAGE,
+    "Факт": FACTS,
+}
 
 
 def _check_action_condition(game, card, user_id):
@@ -322,6 +466,66 @@ def _apply_action_effect(game, card, user_id, target_id):
         key = random.choice(hidden)
         return f"👁 Скрытая характеристика {target['name']}: {key} — {target['card'][key]}"
 
+    if cid == "swap_health":
+        target = game["players"][target_id]
+        actor["card"]["Здоровье"], target["card"]["Здоровье"] = target["card"]["Здоровье"], actor["card"]["Здоровье"]
+        return f"🩺 {escape(actor['name'])} и {escape(target['name'])} поменялись показателями здоровья!"
+
+    if cid == "swap_age":
+        target = game["players"][target_id]
+        actor["card"]["Возраст"], target["card"]["Возраст"] = target["card"]["Возраст"], actor["card"]["Возраст"]
+        return f"🎂 {escape(actor['name'])} и {escape(target['name'])} поменялись возрастом!"
+
+    if cid == "swap_phobia":
+        target = game["players"][target_id]
+        actor["card"]["Фобия"], target["card"]["Фобия"] = target["card"]["Фобия"], actor["card"]["Фобия"]
+        return f"😱 {escape(actor['name'])} и {escape(target['name'])} поменялись фобиями!"
+
+    if cid == "swap_fact":
+        target = game["players"][target_id]
+        actor["card"]["Факт"], target["card"]["Факт"] = target["card"]["Факт"], actor["card"]["Факт"]
+        return f"🕵️ {escape(actor['name'])} и {escape(target['name'])} обменялись скрытыми фактами!"
+
+    if cid == "gift_baggage":
+        target = game["players"][target_id]
+        given = actor["card"]["Багаж"]
+        actor["card"]["Багаж"] = "Ничего (отдал(а) свой багаж)"
+        target["card"]["Багаж"] = given
+        return f"🎁 {escape(actor['name'])} отдал(а) свой багаж игроку {escape(target['name'])}, сам(а) оставшись ни с чем!"
+
+    if cid == "mind_read":
+        target = game["players"][target_id]
+        hidden = [k for k in CARD_ORDER if k not in target["revealed"]]
+        if not hidden:
+            return f"🔮 У {target['name']} больше нет скрытых характеристик."
+        keys = random.sample(hidden, k=min(2, len(hidden)))
+        lines = [f"🔮 Скрытые характеристики {target['name']}:"]
+        lines.extend(f"{key} — {target['card'][key]}" for key in keys)
+        return "\n".join(lines)
+
+    if cid == "confession":
+        hidden = [k for k in CARD_ORDER if k not in actor["revealed"]]
+        if not hidden:
+            return f"🎤 У {escape(actor['name'])} уже не осталось скрытых характеристик для признания."
+        key = random.choice(hidden)
+        actor["revealed"].append(key)
+        return f"🎤 {escape(actor['name'])} делает чистосердечное признание!\n{key}: {escape(str(actor['card'][key]))}"
+
+    if cid == "shield_transfer":
+        target = game["players"][target_id]
+        game["immune_uid"] = target_id
+        return f"🤝 {escape(actor['name'])} передал(а) неприкосновенность в этом раунде игроку {escape(target['name'])}!"
+
+    if cid == "reroll":
+        hidden = [k for k in CARD_ORDER if k not in actor["revealed"] and k in ATTRIBUTE_POOLS]
+        if not hidden:
+            return f"🔄 У {escape(actor['name'])} не осталось характеристик, которые можно перебросить."
+        key = random.choice(hidden)
+        old_value = actor["card"][key]
+        pool = [v for v in ATTRIBUTE_POOLS[key] if v != old_value]
+        actor["card"][key] = random.choice(pool) if pool else old_value
+        return f"🔄 {escape(actor['name'])} перебросил(а) характеристику «{key}» на новую (что выпало — узнаете при раскрытии)."
+
     return "Эффект применён."
 
 
@@ -369,6 +573,48 @@ FATE_CARDS = [
         "survivor_effect": "Если ты попадёшь в бункер — периодически будет коротить проводку из-за твоих 'улучшений'.",
         "mechanic": "flavor",
     },
+    {
+        "id": "clown",
+        "name": "🤡 Клоун",
+        "eliminated_effect": "Уходишь под общий смех — прощальная шутка обязательна.",
+        "survivor_effect": "Если выживешь — в бункере теперь вечный цирк, шутки не прекратятся никогда.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "unlucky_magnet",
+        "name": "🧲 Магнит неудач",
+        "eliminated_effect": "Тебя исключают, и заодно у кого-то из живых теряется мелкая вещь из багажа.",
+        "survivor_effect": "Если выживешь — в бункере периодически будут пропадать мелкие вещи без объяснения причин.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "quiet_one",
+        "name": "🕯 Тихоня",
+        "eliminated_effect": "Уходишь тихо — никто даже толком не заметил.",
+        "survivor_effect": "Если выживешь — атмосфера в бункере становится подозрительно спокойной... слишком спокойной.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "lucky_charm",
+        "name": "🍀 Талисман удачи",
+        "eliminated_effect": "Даже вылетая, ты умудряешься оставить всем на удачу что-то приятное.",
+        "survivor_effect": "Если выживешь — с тобой в бункере обитателям как-то везёт больше обычного.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "conspiracy_theorist",
+        "name": "🛸 Конспиролог",
+        "eliminated_effect": "Уходя, ты успеваешь заявить, что всё это было подстроено заранее.",
+        "survivor_effect": "Если выживешь — в бункере теперь регулярные лекции о заговоре мирового правительства.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "hoarder",
+        "name": "📦 Барахольщик",
+        "eliminated_effect": "Тебя исключают, но перед этим ты успеваешь незаметно набрать в карманы всякой мелочи.",
+        "survivor_effect": "Если выживешь — свободного места в бункере станет заметно меньше, зато у всего есть запасной экземпляр.",
+        "mechanic": "flavor",
+    },
 ]
 FATE_CARDS_BY_ID = {c["id"]: c for c in FATE_CARDS}
 
@@ -410,7 +656,7 @@ def _ghost_vote_keyboard(chat_id, alive):
 
 def _generate_card():
     return {
-        "Возраст": str(random.randint(18, 65)),
+        "Возраст": str(random.randint(18, 75)),
         "Профессия": random.choice(PROFESSIONS),
         "Здоровье": random.choice(HEALTH),
         "Хобби": random.choice(HOBBIES),
@@ -524,7 +770,10 @@ async def _run_reveal_round(chat_id, context):
             player = game["players"][uid]
             card_text = ", ".join(f"{k}: {v}" for k, v in player["card"].items())
             lines.append(f"• {escape(player['name'])} — {escape(card_text)}")
-        await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML)
+        await context.bot.send_message(
+            chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML,
+            reply_markup=_status_keyboard(chat_id)
+        )
         await asyncio.sleep(1)
         await _start_voting(chat_id, context)
         return
@@ -542,7 +791,10 @@ async def _run_reveal_round(chat_id, context):
         lines.append(f"• {escape(player['name'])} — {escape(known)}")
 
     game["round_index"] += 1
-    await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML)
+    await context.bot.send_message(
+        chat_id=chat_id, text="\n".join(lines), parse_mode=ParseMode.HTML,
+        reply_markup=_status_keyboard(chat_id)
+    )
     await asyncio.sleep(1)
     await _start_voting(chat_id, context)
 
@@ -572,6 +824,34 @@ def _voting_keyboard(chat_id, alive):
     buttons.append([InlineKeyboardButton("🎴 Карта действия", callback_data=f"ba:{chat_id}"),
                      InlineKeyboardButton("👻 Судьба", callback_data=f"bf:{chat_id}")])
     return InlineKeyboardMarkup(buttons)
+
+
+def _status_keyboard(chat_id):
+    """Компактная клавиатура с картами (без голосования) — цепляется к служебным сообщениям
+    игры (раскрытие раунда, итоги голосования и т.д.), чтобы игрок мог посмотреть/использовать
+    свою карту в любой момент, а не только в лобби или во время голосования."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 Моя карта", callback_data=f"bc:{chat_id}")],
+        [InlineKeyboardButton("🎴 Карта действия", callback_data=f"ba:{chat_id}"),
+         InlineKeyboardButton("👻 Судьба", callback_data=f"bf:{chat_id}")],
+    ])
+
+
+async def command_bunker_cards(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """!карта — присылает свежее сообщение с кнопками карт, чтобы не искать их
+    в старых сообщениях, если игра идёт уже давно."""
+    chat = update.effective_chat
+    game = BUNKER_GAMES.get(chat.id)
+    if not game or game["phase"] == "finished":
+        await update.message.reply_text("ℹ️ В этом чате сейчас нет активной игры в Бункер.")
+        return
+    if update.effective_user.id not in game["players"]:
+        await update.message.reply_text("⚠️ Ты не участвуешь в текущей игре в Бункер.")
+        return
+    await update.message.reply_text(
+        "🎴 Твои карты (жми кнопку — результат увидишь только ты):",
+        reply_markup=_status_keyboard(chat.id)
+    )
 
 
 async def _start_voting(chat_id, context):
@@ -651,7 +931,7 @@ async def _tally_votes(chat_id, context):
         text = "🤝 Большинство пропустило голосование — в этом раунде никого не исключаем."
         if was_immune_saved:
             text += f"\n🛡 {escape(game['players'][immune_uid]['name'])} был(а) защищён(а) карточкой неприкосновенности."
-        await context.bot.send_message(chat_id=chat_id, text=text)
+        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=_status_keyboard(chat_id))
         await _run_reveal_round(chat_id, context)
         return
 
@@ -675,7 +955,8 @@ async def _tally_votes(chat_id, context):
             f"💀 {escape(name)} не попадает в бункер и остаётся снаружи.\n\n"
             f"📇 Его(её) карта полностью раскрывается:\n{escape(card_text)}"
             f"{fate_suffix}{immune_suffix}"
-        )
+        ),
+        reply_markup=_status_keyboard(chat_id)
     )
 
     alive = [uid for uid in game["order"] if game["players"][uid]["alive"]]
@@ -761,7 +1042,8 @@ async def kick_afk_player(chat_id, target_id, context):
             f"⏱ {escape(name)} исключён(а) из бункера за неактивность (афк).\n\n"
             f"📇 Его(её) карта полностью раскрывается:\n{escape(card_text)}"
             f"{fate_suffix}"
-        )
+        ),
+        reply_markup=_status_keyboard(chat_id)
     )
 
     # Если шло голосование — убираем голос самого афкера и голоса, отданные против него,
@@ -878,8 +1160,10 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
             text=(
                 f"🚨 Игра началась! Участников: {len(game['players'])}. "
                 f"В бункере есть место для {game['survivors_target']}.\n"
-                f"Каждый раунд открывается одна характеристика всех участников, затем голосование за исключение."
-            )
+                f"Каждый раунд открывается одна характеристика всех участников, затем голосование за исключение.\n"
+                f"Свою карту действия и карту судьбы можно посмотреть в любой момент — кнопки под сообщениями игры или командой !карта."
+            ),
+            reply_markup=_status_keyboard(chat_id)
         )
         await _run_reveal_round(chat_id, context)
 
