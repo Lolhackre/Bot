@@ -407,9 +407,15 @@ def _check_action_condition(game, card, user_id):
     if ctype == "min_round":
         if game["phase"] not in ("running", "voting"):
             return False, "карта работает только во время игры"
-        if game["round_index"] >= card["min_round"]:
+        # round_index увеличивается сразу после раскрытия характеристики раунда,
+        # то есть во время голосования N-го раунда round_index уже равен N.
+        # Поэтому карта с min_round=1 ("доступна со 2 раунда") должна открываться
+        # только когда round_index > min_round, иначе она случайно доступна
+        # уже на голосовании 1-го раунда.
+        if game["round_index"] > card["min_round"]:
             return True, None
-        return False, f"откроется с {card['min_round'] + 1} раунда (сейчас идёт раунд {game['round_index'] + 1})"
+        current_round_display = max(1, game["round_index"])
+        return False, f"откроется с {card['min_round'] + 1} раунда (сейчас идёт раунд {current_round_display})"
 
     if ctype == "nominated":
         if game["phase"] != "voting":
@@ -818,8 +824,14 @@ def _voting_text(game, alive):
 
 def _voting_keyboard(chat_id, alive):
     game = BUNKER_GAMES[chat_id]
+    # У кого уже есть хотя бы один голос — показываем ✅ вместо ❌ прямо на кнопке,
+    # чтобы было видно с первого взгляда, за кого голосуют, не читая текст выше.
+    voted_for = {t for t in game["votes"].values() if t != "skip"}
     buttons = [
-        [InlineKeyboardButton(f"❌ {game['players'][uid]['name']}", callback_data=f"bv:{chat_id}:{uid}")]
+        [InlineKeyboardButton(
+            f"{'✅' if uid in voted_for else '❌'} {game['players'][uid]['name']}",
+            callback_data=f"bv:{chat_id}:{uid}"
+        )]
         for uid in alive
     ]
     buttons.append([InlineKeyboardButton("⏭ Пропустить голос", callback_data=f"bv:{chat_id}:skip")])
