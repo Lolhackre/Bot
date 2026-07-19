@@ -470,8 +470,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "☢️ <b>Игра «Бункер»:</b>\n"
             "🚪 <code>!бункер [число выживших]</code> — Создать лобби игры (минимум 4 игрока).\n"
             "🛑 <code>!бункер стоп</code> — Остановить текущую игру (создатель лобби или админ).\n"
-            "🔪 <code>!мафия</code> — Создать лобби игры Мафия (минимум 4 игрока).\n"
-            "🎭 <code>!роль</code> — Посмотреть свою роль в текущей игре Мафия.\n"
+            "🔪 <code>!мафия</code> — Создать лобби игры Мафия (минимум 4 игрока). Роль смотрится кнопкой «🎭 Моя роль».\n"
             "🛑 <code>!мафия стоп</code> — Остановить текущую игру в Мафию (создатель лобби или админ).\n"
             "🎴 <code>!карта</code> — Прислать заново кнопки своих карт (можно в любой момент игры, не только в начале).\n\n"
             "⚖️ <code>!суд</code> [причина] — Ответом на сообщение участника устроить шуточный суд чата (с приговором и голосовым оглашением).\n"
@@ -995,10 +994,6 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await bunker_and_agent.command_bunker_start(update, context)
         return
 
-    if text in ("!роль", "!моя роль"):
-        await mafia.command_mafia_role(update, context)
-        return
-
     if text.startswith("!мафия стоп") or text.startswith("!мафия отмена"):
         game = mafia.MAFIA_GAMES.get(update.message.chat_id)
         if not game:
@@ -1007,6 +1002,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not is_creator and current_rank < 6 and user_id != game["host_id"]:
             await update.message.reply_text("⛔ Остановить игру может только создатель лобби или админ.")
             return
+        mafia.cancel_pending_timer(game)
         del mafia.MAFIA_GAMES[update.message.chat_id]
         await update.message.reply_text("🛑 Игра в Мафию остановлена.")
         return
