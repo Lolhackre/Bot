@@ -386,6 +386,196 @@ ACTION_CARDS = [
         "target_required": False,
         "private_result": False,
     },
+    {
+        "id": "swap_hobby",
+        "name": "🎯 Обмен хобби",
+        "desc": "Поменяйся хобби с любым живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "trade_full_card",
+        "name": "🔀 Полный обмен",
+        "desc": "Поменяйся ВСЕЙ карточкой характеристик целиком с любым живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "expose",
+        "name": "📢 Разоблачение",
+        "desc": "Публично раскрой одну случайную нераскрытую характеристику выбранного живого игрока.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "mass_peek",
+        "name": "🕵️‍♂️ Массовая разведка",
+        "desc": "Узнай по одной случайной нераскрытой характеристике каждого живого игрока. Результат увидишь только ты.",
+        "condition_type": "max_alive",
+        "max_alive": 4,
+        "condition_desc": "доступно, когда живых участников осталось ≤4",
+        "target_required": False,
+        "private_result": True,
+    },
+    {
+        "id": "disable_card",
+        "name": "🚫 Саботаж",
+        "desc": "Навсегда отключи карту действия выбранного живого игрока — использовать её он больше не сможет.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "copy_card",
+        "name": "📋 Плагиат",
+        "desc": "Скопируй себе карту действия выбранного живого игрока (если он ещё не успел её использовать).",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "baggage_ward",
+        "name": "🛡️ Охрана багажа",
+        "desc": "Защити свой багаж от кражи или подарка в этом раунде.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
+    {
+        "id": "reroll_target",
+        "name": "🎲 Чужой реролл",
+        "desc": "Перебрось одну случайную нераскрытую характеристику выбранного живого игрока на новую.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "karma_boost",
+        "name": "🍀 Прилив удачи",
+        "desc": "Мгновенно получи +5 очков прогулочной кармы за смекалку.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
+    {
+        "id": "karma_drain",
+        "name": "💀 Чёрная метка",
+        "desc": "Забери 5 очков прогулочной кармы у выбранного живого игрока.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "double_confession",
+        "name": "💬 Двойное признание",
+        "desc": "Раскрой всем сразу две свои случайные нераскрытые характеристики.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
+    {
+        "id": "double_swap_baggage_fact",
+        "name": "🔄 Багаж и факт",
+        "desc": "Поменяйся с любым живым игроком сразу двумя характеристиками: Багаж и Факт.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "future_shield",
+        "name": "🔮 Отложенный щит",
+        "desc": "Получи неприкосновенность не в этом, а в следующем раунде голосования.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
+    {
+        "id": "double_swap_health_age",
+        "name": "🔄 Возраст и здоровье",
+        "desc": "Поменяйся с любым живым игроком сразу возрастом и здоровьем.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "jackpot_reroll",
+        "name": "🎰 Джекпот",
+        "desc": "Перебрось СРАЗУ ВСЕ свои ещё не раскрытые характеристики на новые.",
+        "condition_type": "min_round",
+        "min_round": 3,
+        "condition_desc": "доступно начиная с 4 раунда",
+        "target_required": False,
+        "private_result": False,
+    },
+    {
+        "id": "double_swap_hobby_phobia",
+        "name": "🔄 Хобби и фобия",
+        "desc": "Поменяйся с любым живым игроком сразу хобби и фобией.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "karma_swap",
+        "name": "💱 Обмен кармой",
+        "desc": "Поменяйся всей прогулочной кармой с выбранным живым игроком.",
+        "condition_type": "min_round",
+        "min_round": 1,
+        "condition_desc": "доступно начиная со 2 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "reveal_fate_card",
+        "name": "👁️‍🗨️ Раскрытие судьбы",
+        "desc": "Публично раскрой карту судьбы выбранного живого игрока — что его ждёт при вылете и при победе.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": False,
+    },
+    {
+        "id": "peek_action_card",
+        "name": "🔍 Разведка по картам",
+        "desc": "Узнай, какая карта действия у выбранного живого игрока и использована ли она уже. Видно только тебе.",
+        "condition_type": "min_round",
+        "min_round": 2,
+        "condition_desc": "доступно начиная с 3 раунда",
+        "target_required": True,
+        "private_result": True,
+    },
 ]
 ACTION_CARDS_BY_ID = {c["id"]: c for c in ACTION_CARDS}
 
@@ -443,6 +633,8 @@ def _apply_action_effect(game, card, user_id, target_id):
 
     if cid == "steal_baggage":
         target = game["players"][target_id]
+        if target_id in game.get("baggage_wards", set()):
+            return f"🛡️ {escape(actor['name'])} попытался(-ась) украсть багаж у {escape(target['name'])}, но тот защищён картой «Охрана багажа»!"
         actor["card"]["Багаж"], target["card"]["Багаж"] = target["card"]["Багаж"], actor["card"]["Багаж"]
         return f"🎒 {escape(actor['name'])} тайно поменял(ась) багажом с {escape(target['name'])}!"
 
@@ -494,6 +686,8 @@ def _apply_action_effect(game, card, user_id, target_id):
 
     if cid == "gift_baggage":
         target = game["players"][target_id]
+        if target_id in game.get("baggage_wards", set()):
+            return f"🛡️ {escape(actor['name'])} попытался(-ась) отдать багаж {escape(target['name'])}, но тот защищён картой «Охрана багажа» и отказался принимать!"
         given = actor["card"]["Багаж"]
         actor["card"]["Багаж"] = "Ничего (отдал(а) свой багаж)"
         target["card"]["Багаж"] = given
@@ -531,6 +725,166 @@ def _apply_action_effect(game, card, user_id, target_id):
         pool = [v for v in ATTRIBUTE_POOLS[key] if v != old_value]
         actor["card"][key] = random.choice(pool) if pool else old_value
         return f"🔄 {escape(actor['name'])} перебросил(а) характеристику «{key}» на новую (что выпало — узнаете при раскрытии)."
+
+    if cid == "swap_hobby":
+        target = game["players"][target_id]
+        actor["card"]["Хобби"], target["card"]["Хобби"] = target["card"]["Хобби"], actor["card"]["Хобби"]
+        return f"🎯 {escape(actor['name'])} и {escape(target['name'])} поменялись хобби!"
+
+    if cid == "trade_full_card":
+        target = game["players"][target_id]
+        actor["card"], target["card"] = target["card"], actor["card"]
+        return f"🔀 {escape(actor['name'])} и {escape(target['name'])} полностью поменялись карточками характеристик!"
+
+    if cid == "expose":
+        target = game["players"][target_id]
+        hidden = [k for k in CARD_ORDER if k not in target["revealed"]]
+        if not hidden:
+            return f"📢 У {escape(target['name'])} уже не осталось скрытых характеристик для разоблачения."
+        key = random.choice(hidden)
+        target["revealed"].append(key)
+        return f"📢 {escape(actor['name'])} публично разоблачает {escape(target['name'])}!\n{key}: {escape(str(target['card'][key]))}"
+
+    if cid == "mass_peek":
+        others = [uid for uid in game["order"] if game["players"][uid]["alive"] and uid != user_id]
+        if not others:
+            return "🕵️‍♂️ Нет других живых игроков для разведки."
+        lines = ["🕵️‍♂️ Массовая разведка:"]
+        for uid in others:
+            target = game["players"][uid]
+            hidden = [k for k in CARD_ORDER if k not in target["revealed"]]
+            if not hidden:
+                lines.append(f"{target['name']}: скрытых характеристик не осталось")
+                continue
+            key = random.choice(hidden)
+            lines.append(f"{target['name']}: {key} — {target['card'][key]}")
+        return "\n".join(lines)
+
+    if cid == "disable_card":
+        target = game["players"][target_id]
+        target_card = ACTION_CARDS_BY_ID.get(target["action_card"])
+        target["action_used"] = True
+        target_card_name = target_card["name"] if target_card else "карта действия"
+        return f"🚫 {escape(actor['name'])} саботировал(а) {escape(target['name'])} — его(её) «{escape(target_card_name)}» больше не сработает!"
+
+    if cid == "copy_card":
+        target = game["players"][target_id]
+        if target.get("action_used"):
+            return f"📋 {escape(actor['name'])} попытался(-ась) скопировать карту {escape(target['name'])}, но та уже использована — копировать нечего."
+        actor["action_card"] = target["action_card"]
+        copied_card = ACTION_CARDS_BY_ID[target["action_card"]]
+        return f"📋 {escape(actor['name'])} скопировал(а) себе карту действия «{escape(copied_card['name'])}» игрока {escape(target['name'])}!"
+
+    if cid == "baggage_ward":
+        game.setdefault("baggage_wards", set()).add(user_id)
+        return f"🛡️ {escape(actor['name'])} в этом раунде защитил(а) свой багаж от кражи и подарков!"
+
+    if cid == "reroll_target":
+        target = game["players"][target_id]
+        hidden = [k for k in CARD_ORDER if k not in target["revealed"] and k in ATTRIBUTE_POOLS]
+        if not hidden:
+            return f"🎲 У {escape(target['name'])} не осталось характеристик, которые можно перебросить."
+        key = random.choice(hidden)
+        old_value = target["card"][key]
+        pool = [v for v in ATTRIBUTE_POOLS[key] if v != old_value]
+        target["card"][key] = random.choice(pool) if pool else old_value
+        return f"🎲 {escape(actor['name'])} перебросил(а) характеристику «{key}» игрока {escape(target['name'])} на новую!"
+
+    if cid == "karma_boost":
+        try:
+            with sqlite3.connect(config.DB_PATH) as conn:
+                conn.execute("UPDATE users SET walk_karma = walk_karma + 5 WHERE user_id = ?", (user_id,))
+                conn.commit()
+        except Exception as e:
+            print(f"[BUNKER KARMA_BOOST ERROR] {e}", file=sys.stderr)
+        return f"🍀 {escape(actor['name'])} словил(а) прилив удачи и получил(а) +5 кармы!"
+
+    if cid == "karma_drain":
+        target = game["players"][target_id]
+        try:
+            with sqlite3.connect(config.DB_PATH) as conn:
+                conn.execute("UPDATE users SET walk_karma = walk_karma - 5 WHERE user_id = ?", (target_id,))
+                conn.commit()
+        except Exception as e:
+            print(f"[BUNKER KARMA_DRAIN ERROR] {e}", file=sys.stderr)
+        return f"💀 {escape(actor['name'])} поставил(а) чёрную метку — {escape(target['name'])} теряет 5 кармы!"
+
+    if cid == "double_confession":
+        hidden = [k for k in CARD_ORDER if k not in actor["revealed"]]
+        if not hidden:
+            return f"💬 У {escape(actor['name'])} уже не осталось скрытых характеристик для признания."
+        keys = random.sample(hidden, k=min(2, len(hidden)))
+        for key in keys:
+            actor["revealed"].append(key)
+        lines = [f"💬 {escape(actor['name'])} делает двойное признание!"]
+        lines.extend(f"{key}: {escape(str(actor['card'][key]))}" for key in keys)
+        return "\n".join(lines)
+
+    if cid == "double_swap_baggage_fact":
+        target = game["players"][target_id]
+        actor["card"]["Багаж"], target["card"]["Багаж"] = target["card"]["Багаж"], actor["card"]["Багаж"]
+        actor["card"]["Факт"], target["card"]["Факт"] = target["card"]["Факт"], actor["card"]["Факт"]
+        return f"🔄 {escape(actor['name'])} и {escape(target['name'])} поменялись багажом и фактом!"
+
+    if cid == "future_shield":
+        game["pending_immune_next_round"] = user_id
+        return f"🔮 {escape(actor['name'])} получит неприкосновенность в следующем раунде голосования!"
+
+    if cid == "double_swap_health_age":
+        target = game["players"][target_id]
+        actor["card"]["Здоровье"], target["card"]["Здоровье"] = target["card"]["Здоровье"], actor["card"]["Здоровье"]
+        actor["card"]["Возраст"], target["card"]["Возраст"] = target["card"]["Возраст"], actor["card"]["Возраст"]
+        return f"🔄 {escape(actor['name'])} и {escape(target['name'])} поменялись возрастом и здоровьем!"
+
+    if cid == "jackpot_reroll":
+        hidden = [k for k in CARD_ORDER if k not in actor["revealed"] and k in ATTRIBUTE_POOLS]
+        if not hidden:
+            return f"🎰 У {escape(actor['name'])} не осталось характеристик, которые можно перебросить."
+        for key in hidden:
+            old_value = actor["card"][key]
+            pool = [v for v in ATTRIBUTE_POOLS[key] if v != old_value]
+            actor["card"][key] = random.choice(pool) if pool else old_value
+        return f"🎰 {escape(actor['name'])} сорвал(а) джекпот и перебросил(а) сразу все скрытые характеристики!"
+
+    if cid == "double_swap_hobby_phobia":
+        target = game["players"][target_id]
+        actor["card"]["Хобби"], target["card"]["Хобби"] = target["card"]["Хобби"], actor["card"]["Хобби"]
+        actor["card"]["Фобия"], target["card"]["Фобия"] = target["card"]["Фобия"], actor["card"]["Фобия"]
+        return f"🔄 {escape(actor['name'])} и {escape(target['name'])} поменялись хобби и фобией!"
+
+    if cid == "karma_swap":
+        target = game["players"][target_id]
+        try:
+            with sqlite3.connect(config.DB_PATH) as conn:
+                row_a = conn.execute("SELECT walk_karma FROM users WHERE user_id = ?", (user_id,)).fetchone()
+                row_b = conn.execute("SELECT walk_karma FROM users WHERE user_id = ?", (target_id,)).fetchone()
+                karma_a = row_a[0] if row_a else 0
+                karma_b = row_b[0] if row_b else 0
+                conn.execute("UPDATE users SET walk_karma = ? WHERE user_id = ?", (karma_b, user_id))
+                conn.execute("UPDATE users SET walk_karma = ? WHERE user_id = ?", (karma_a, target_id))
+                conn.commit()
+        except Exception as e:
+            print(f"[BUNKER KARMA_SWAP ERROR] {e}", file=sys.stderr)
+        return f"💱 {escape(actor['name'])} и {escape(target['name'])} полностью поменялись прогулочной кармой!"
+
+    if cid == "reveal_fate_card":
+        target = game["players"][target_id]
+        fate = FATE_CARDS_BY_ID.get(target.get("fate_card"))
+        if not fate:
+            return f"👁️‍🗨️ Карта судьбы {escape(target['name'])} не найдена."
+        return (
+            f"👁️‍🗨️ {escape(actor['name'])} раскрывает карту судьбы игрока {escape(target['name'])}: {escape(fate['name'])}\n"
+            f"💀 Если исключат: {escape(fate['eliminated_effect'])}\n"
+            f"🏠 Если выживет: {escape(fate['survivor_effect'])}"
+        )
+
+    if cid == "peek_action_card":
+        target = game["players"][target_id]
+        target_card = ACTION_CARDS_BY_ID.get(target["action_card"])
+        if not target_card:
+            return f"🔍 Карта действия {target['name']} не найдена."
+        status = "уже использована" if target.get("action_used") else "ещё не использована"
+        return f"🔍 У {target['name']} карта действия «{target_card['name']}» ({status})."
 
     return "Эффект применён."
 
@@ -621,6 +975,146 @@ FATE_CARDS = [
         "name": "📦 Барахольщик",
         "eliminated_effect": "Тебя исключают, но перед этим ты успеваешь незаметно набрать в карманы всякой мелочи.",
         "survivor_effect": "Если выживешь — свободного места в бункере станет заметно меньше, зато у всего есть запасной экземпляр.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "night_owl",
+        "name": "🦉 Полуночник",
+        "eliminated_effect": "Тебя провожают глубокой ночью — ты единственный(-ая), кто в этот час ещё бодрствовал(а).",
+        "survivor_effect": "Если выживешь — твой режим сна не совпадает ни с кем в бункере, будешь дежурить по ночам в одиночку.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "singer",
+        "name": "🎤 Тайный певец",
+        "eliminated_effect": "Перед уходом ты выдаёшь неожиданно сильный вокальный номер на прощание.",
+        "survivor_effect": "Если выживешь — по вечерам в бункере теперь караоке-час, хочешь того или нет.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "gambler",
+        "name": "🎲 Игрок",
+        "eliminated_effect": "Тебя исключают, но ты успеваешь заключить с кем-то предсмертное пари на исход игры.",
+        "survivor_effect": "Если выживешь — начнёшь предлагать всем в бункере ставки на всё подряд.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "cat_lover",
+        "name": "🐱 Кошатник",
+        "eliminated_effect": "Уходя, ты оставляешь всем открытку с котиками на память.",
+        "survivor_effect": "Если выживешь — окажется, что с тобой в бункер пробрался кот, и теперь он тут главный.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "doomsday_prepper",
+        "name": "🧰 Запасливый параноик",
+        "eliminated_effect": "Тебя исключают, но у тебя, кажется, был план и на этот случай.",
+        "survivor_effect": "Если выживешь — обнаружится тайник с припасами, о котором ты никому не говорил(а).",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "sleepwalker",
+        "name": "😴 Лунатик",
+        "eliminated_effect": "Тебя провожают — ты до последнего не до конца понимаешь, что происходит.",
+        "survivor_effect": "Если выживешь — по ночам будешь пугать соседей по бункеру хождением во сне.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "chef_wannabe",
+        "name": "🍳 Кулинар-самоучка",
+        "eliminated_effect": "На прощание ты пытаешься накормить всех чем-то экспериментальным.",
+        "survivor_effect": "Если выживешь — готовка в бункере теперь исключительно по твоим рецептам, о вкусе история умалчивает.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "motivator",
+        "name": "📣 Мотиватор",
+        "eliminated_effect": "Уходя, ты произносишь воодушевляющую речь для оставшихся.",
+        "survivor_effect": "Если выживешь — каждое утро в бункере теперь начинается с твоей зарядки и кричалок.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "hypochondriac",
+        "name": "🤒 Мнительный",
+        "eliminated_effect": "Тебя исключают — ты успеваешь предупредить всех о десятке болезней, которые тут возможны.",
+        "survivor_effect": "Если выживешь — будешь требовать дезинфекцию бункера каждые два часа.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "romantic",
+        "name": "💌 Романтик",
+        "eliminated_effect": "Уходя, ты оставляешь трогательное письмо каждому из оставшихся.",
+        "survivor_effect": "Если выживешь — начнёшь устраивать в бункере вечера поэзии при свечах.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "tech_geek",
+        "name": "🔌 Технарь",
+        "eliminated_effect": "Перед уходом ты успеваешь всё-таки почти взломать систему бункера.",
+        "survivor_effect": "Если выживешь — начнёшь до бесконечности «улучшать» системы бункера.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "skeptic",
+        "name": "🤨 Скептик",
+        "eliminated_effect": "Уходя, ты заявляешь, что всё равно не верил(а) в успех этой затеи.",
+        "survivor_effect": "Если выживешь — будешь сомневаться в каждом решении совета бункера.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "historian",
+        "name": "📚 Летописец",
+        "eliminated_effect": "Перед уходом ты передаёшь толстую тетрадь с записями о каждом участнике.",
+        "survivor_effect": "Если выживешь — начнёшь вести подробную летопись жизни бункера, включая всё чужое бельё.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "prankster",
+        "name": "🎭 Шутник",
+        "eliminated_effect": "Твой уход оказывается розыгрышем... или нет — в итоге тебя всё-таки выгоняют.",
+        "survivor_effect": "Если выживешь — розыгрыши в бункере теперь ежедневная традиция, будь начеку.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "silent_guardian",
+        "name": "🛡 Молчаливый защитник",
+        "eliminated_effect": "Тебя провожают — ты до последнего пытался(-ась) прикрыть кого-то другого.",
+        "survivor_effect": "Если выживешь — станешь негласным защитником бункера, даже если тебя об этом не просили.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "overpacked",
+        "name": "🧳 С запасом на всё",
+        "eliminated_effect": "При исключении выясняется, что у тебя с собой был чемодан на все случаи жизни.",
+        "survivor_effect": "Если выживешь — окажется, что ты тайно прихватил(а) с собой вещи всех соседей.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "last_optimist",
+        "name": "🌞 Последний оптимист",
+        "eliminated_effect": "Уходя, ты уверяешь всех, что снаружи тоже будет неплохо.",
+        "survivor_effect": "Если выживешь — твой неисправимый оптимизм станет либо спасением бункера, либо его испытанием.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "door_slammer",
+        "name": "🚪 Хлопнувший дверью",
+        "eliminated_effect": "Ты уходишь эффектно, хлопнув дверью бункера так, что все вздрагивают.",
+        "survivor_effect": "Если выживешь — окажется, что именно ты отвечаешь за шумную входную дверь бункера.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "secret_diary",
+        "name": "📓 Тайный дневник",
+        "eliminated_effect": "После твоего ухода находят дневник с наблюдениями за каждым из участников.",
+        "survivor_effect": "Если выживешь — все узнают, что ты тайно вёл(а) дневник наблюдений за соседями.",
+        "mechanic": "flavor",
+    },
+    {
+        "id": "whistleblower",
+        "name": "📢 Информатор",
+        "eliminated_effect": "Уходя, ты сливаешь остальным пару секретов о жизни бункера, которые узнал(а) заранее.",
+        "survivor_effect": "Если выживешь — станет известно, что именно ты всё это время докладывал(а) обо всех остальным.",
         "mechanic": "flavor",
     },
 ]
@@ -755,6 +1249,8 @@ async def command_bunker_start(update: Update, context: ContextTypes.DEFAULT_TYP
         "immune_uid": None,
         "ghost_votes": {},
         "ghost_voting_message_id": None,
+        "baggage_wards": set(),
+        "pending_immune_next_round": None,
     }
     BUNKER_GAMES[chat_id] = game
 
@@ -893,6 +1389,14 @@ async def _start_voting(chat_id, context):
     game["blocked_voters"] = set()
     game["immune_uid"] = None
     game["ghost_votes"] = {}
+    game["baggage_wards"] = set()
+
+    # Карта "Отложенный щит" даёт неприкосновенность именно в СЛЕДУЮЩЕМ раунде —
+    # применяем её здесь, в начале нового раунда голосования, и сразу очищаем.
+    pending_immune = game.get("pending_immune_next_round")
+    game["pending_immune_next_round"] = None
+    if pending_immune and game["players"].get(pending_immune, {}).get("alive"):
+        game["immune_uid"] = pending_immune
 
     message = await context.bot.send_message(
         chat_id=chat_id,
@@ -1332,7 +1836,10 @@ async def handle_bunker_callback(update: Update, context: ContextTypes.DEFAULT_T
             return
 
         result_text = _apply_action_effect(game, card, acting_uid, target_uid)
-        player["action_used"] = True
+        # "Плагиат" — особый случай: она не тратит слот использования карты, а заменяет
+        # саму карту актёра на скопированную, чтобы её потом можно было реально применить.
+        if card["id"] != "copy_card":
+            player["action_used"] = True
 
         if card.get("private_result"):
             await query.answer(text=result_text[:200], show_alert=True)
