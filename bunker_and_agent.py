@@ -343,13 +343,23 @@ async def _start_voting(chat_id, context):
 async def _tally_votes(chat_id, context):
     game = BUNKER_GAMES[chat_id]
     counts = {}
+    skip_count = 0
     for target in game["votes"].values():
         if target == "skip":
-            continue
-        counts[target] = counts.get(target, 0) + 1
+            skip_count += 1
+        else:
+            counts[target] = counts.get(target, 0) + 1
 
-    if not counts:
-        await context.bot.send_message(chat_id=chat_id, text="🤝 Никто не набрал голосов — в этом раунде исключения не будет.")
+    vote_count = sum(counts.values())
+
+    # Если пропустивших голосование больше либо столько же, сколько проголосовавших
+    # за исключение — большинство не хочет никого выгонять, исключения не будет,
+    # даже если кто-то один проголосовал против конкретного человека.
+    if not counts or skip_count >= vote_count:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🤝 Большинство пропустило голосование — в этом раунде никого не исключаем."
+        )
         await _run_reveal_round(chat_id, context)
         return
 
