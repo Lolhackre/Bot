@@ -367,11 +367,16 @@ async def _tally_votes(chat_id, context):
     candidates = [uid for uid, c in counts.items() if c == max_votes]
     eliminated_id = random.choice(candidates)
     game["players"][eliminated_id]["alive"] = False
-    name = game["players"][eliminated_id]["name"]
+    eliminated_player = game["players"][eliminated_id]
+    name = eliminated_player["name"]
+    card_text = ", ".join(f"{k}: {v}" for k, v in eliminated_player["card"].items())
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"💀 {escape(name)} не попадает в бункер и остаётся снаружи."
+        text=(
+            f"💀 {escape(name)} не попадает в бункер и остаётся снаружи.\n\n"
+            f"📇 Его(её) карта полностью раскрывается:\n{escape(card_text)}"
+        )
     )
 
     alive = [uid for uid in game["order"] if game["players"][uid]["alive"]]
