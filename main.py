@@ -1103,7 +1103,7 @@ def main():
     # Кнопки игры "Бункер" (bj/bs/bv) должны быть доступны ВСЕМ игрокам, а не только рангу 6+,
     # поэтому регистрируем их ПЕРЕД общим handle_callback_query (внутри группы срабатывает первый совпавший хэндлер)
     app.add_handler(CallbackQueryHandler(bunker.handle_bunker_callback, pattern=r"^(bj|bs|bv|bc|ba|bu|bt|bf|bg):"))
-    app.add_handler(CallbackQueryHandler(mafia.handle_mafia_callback, pattern=r"^(mj|ms|mr|mk|mm|mg|md|mc|mv):"))
+    app.add_handler(CallbackQueryHandler(mafia.handle_mafia_callback, pattern=r"^(mj|ms|mr|mk|mm|mg|md|mc|mv|mp|mo|mw|ml|msg):"))
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
 
