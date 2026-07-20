@@ -556,3 +556,20 @@ def db_adjust_penalty(user_id: int, delta: int):
             ON CONFLICT(user_id) DO UPDATE SET total_amount = MAX(0, total_amount + ?)
         """, (user_id, max(0, delta), delta))
         conn.commit()
+
+def db_adjust_penalty_unbounded(user_id: int, delta: int):
+    """Как db_adjust_penalty, но БЕЗ ограничения снизу — сумма может уходить в минус
+    (например, Глава выдал денег больше, чем у человека было штрафов — образовался долг)."""
+    with db_connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS penalties (
+                user_id INTEGER PRIMARY KEY,
+                total_amount INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            INSERT INTO penalties (user_id, total_amount)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET total_amount = total_amount + ?
+        """, (user_id, delta, delta))
+        conn.commit()
