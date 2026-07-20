@@ -1724,7 +1724,7 @@ def main():
     )
 
     app.add_handler(
-        MessageHandler(filters.STICKER & filters.ChatType.GROUPS, handle_penalty_sticker),
+        MessageHandler(filters.Sticker & filters.ChatType.GROUPS, handle_penalty_sticker),
         group=0
     )
 
