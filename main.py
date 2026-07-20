@@ -40,12 +40,12 @@ from database import (
     resolve_target_user,format_rank
 )
 
-import modules.actions as actions
-import modules.whois as whois
-import modules.quotes as quotes
-import modules.excuses as excuses
-import modules.compatibility as compatibility
-import modules.balabol as balabol
+import modulesfolder.actions as actions
+import modulesfolder.whois as whois
+import modulesfolder.quotes as quotes
+import modulesfolder.excuses as excuses
+import modulesfolder.compatibility as compatibility
+import modulesfolder.balabol as balabol
 
 # Глобальное состояние для отмены опроса на текущий вечер
 CANCELLED_POLL_REASON = None
