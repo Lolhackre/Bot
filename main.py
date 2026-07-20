@@ -389,7 +389,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     is_creator = (user_id == 8049751536)
 
     try:
-        print(update.message.sticker.file_unique_id)
+        print(update.message.sticker.file_id)
     except Exception as e:
         print(f"Error occurred while printing sticker file unique ID: {e}")
 
