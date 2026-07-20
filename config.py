@@ -49,12 +49,22 @@ DEFAULT_COMMAND_RANKS = {
     "действие": 0,
     "цитата": 0,
     "совместимость": 0,
-    "кто_из_нас": 0,
+    "кто": 0,
     "уровень": 0,
     "бункер_отмена": 3,
     "бункер_афк": 4,
 }
 
+DB_MODULES_ENABLED = {
+    "actions": True,
+    "bunker": True,
+    "mafia": True,
+    "excuses": True,
+    "quotes": True,
+    "compatibility": True,
+    "balabol": True,
+    "whois": True,
+}
 # Человекочитаемые названия команд для вывода в !доступ
 COMMAND_LABELS = {
     "отменить_выбор": "!отменить выбор — отмена планового опроса",

@@ -1,7 +1,21 @@
 import sqlite3
 from datetime import datetime
-from config import DB_PATH, MESSAGE_SCORE, WALK_SCORE, NOT_WALKING_PENALTY, DEFAULT_RANK_NAMES, DEFAULT_COMMAND_RANKS
+from config import DB_PATH, MESSAGE_SCORE, WALK_SCORE, NOT_WALKING_PENALTY, DEFAULT_RANK_NAMES, DEFAULT_COMMAND_RANKS, DB_MODULES_ENABLED
+from html import escape
+import json
 
+from telegram.ext import (
+    Application,
+    MessageHandler, 
+    CommandHandler,
+    PollAnswerHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters,
+    ApplicationHandlerStop
+)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 def db_connect():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON;")
@@ -88,7 +102,48 @@ def db_init():
                 INSERT OR IGNORE INTO command_access (command, min_rank) VALUES (?, ?)
             """, (cmd, rank))
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS modules (
+                module_name TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        for module_name, enabled in DB_MODULES_ENABLED.items():
+            conn.execute("""
+                INSERT OR IGNORE INTO modules (module_name, enabled) VALUES (?, ?)
+            """, (module_name, int(enabled)))
+
         conn.commit()
+
+
+def db_format_user_link(user_id, username, full_name):
+    nickname = db_get_nickname(user_id)
+    display_name = escape(nickname or full_name or username or str(user_id))
+    return f'<a href="tg://user?id={user_id}">{display_name}</a>'
+
+def db_module_enabled(module_name):
+    """Проверяет, включен ли модуль в базе (по умолчанию True, если нет записи)"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT enabled FROM modules WHERE module_name = ?", (module_name,))
+        row = cur.fetchone()
+        if row is None:
+            # Если модуля нет в базе, создаем запись с enabled=1
+            conn.execute("INSERT INTO modules (module_name, enabled) VALUES (?, 1)", (module_name,))
+            conn.commit()
+            return True
+        return bool(row[0])
+
+def db_module_enabled_get(module_name):
+    """Возвращает True/False, включен ли модуль в базе (по умолчанию True, если нет записи)"""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT enabled FROM modules WHERE module_name = ?", (module_name,))
+        row = cur.fetchone()
+        if row is None:
+            # Если модуля нет в базе, создаем запись с enabled=1
+            conn.execute("INSERT INTO modules (module_name, enabled) VALUES (?, 1)", (module_name,))
+            conn.commit()
+            return True
+        return bool(row[0])
 
 def db_log_message(user_id, username, full_name, is_command=False):
     """Обновляет профиль, сбрасывает счетчик молчания и инкрементирует сообщения (общие и за день)"""
@@ -328,3 +383,158 @@ def db_get_penalty(user_id: int) -> int:
         cur = conn.execute("SELECT total_amount FROM penalties WHERE user_id = ?", (user_id,))
         row = cur.fetchone()
         return row[0] if row else 0
+    
+def db_get_user_last_vote(user_id, poll_id):
+    with db_connect() as conn:
+        cur = conn.execute("SELECT option_ids FROM user_current_votes WHERE user_id = ? AND poll_id = ?", (user_id, str(poll_id)))
+        row = cur.fetchone()
+        return json.loads(row[0]) if row else []
+
+def db_update_user_vote(user_id, poll_id, option_ids):
+    with db_connect() as conn:
+        conn.execute("""
+            INSERT INTO user_current_votes (user_id, poll_id, option_ids)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, poll_id) DO UPDATE SET option_ids = excluded.option_ids
+        """, (user_id, str(poll_id), json.dumps(option_ids)))
+        conn.commit()
+
+def db_change_walk_karma(user_id, amount):
+    with db_connect() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET walk_karma = walk_karma + ? 
+            WHERE user_id = ?
+        """, (amount, user_id))
+        conn.commit()
+
+# ---------- Безопасные функции начисления и снятия прогулок (Защита от фарма) ----------
+def db_apply_walk_attendance(user_id):
+    """Начисляет +1 к прогулкам и +1 к карме (уменьшено по запросу)"""
+    with db_connect() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET walks_count = walks_count + 1,
+                walk_karma = walk_karma + 1
+            WHERE user_id = ?
+        """, (user_id,))
+        conn.commit()
+
+def db_revert_walk_attendance(user_id):
+    """Зеркально снимает прогулку и убирает ровно 1 очко кармы"""
+    with db_connect() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET walks_count = MAX(0, walks_count - 1),
+                walk_karma = walk_karma - 1
+            WHERE user_id = ?
+        """, (user_id,))
+        conn.commit()
+
+def db_get_user_id_by_username(username: str):
+    username = username.lstrip('@').lower()
+    with db_connect() as conn:
+        cur = conn.execute("SELECT user_id FROM users WHERE LOWER(username) = ? LIMIT 1", (username,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+def db_reset_user_stats(user_id):
+    """Полное обнуление статистики пользователя"""
+    with db_connect() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET messages_count = 0,
+                daily_messages_count = 0, -- Добавлено обнуление ежедневного счетчика
+                walks_count = 0,
+                walk_karma = 0,
+                days_inactive = 0
+            WHERE user_id = ?
+        """, (user_id,))
+        conn.commit()
+
+async def resolve_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE, arg_text: str = None):
+    """
+    Определяет целевого пользователя.
+    1. Если есть reply_to_message — берёт автора реплая.
+    2. Если в сообщении есть текстовый тег (@username) — вытаскивает объект пользователя из Telegram Entities.
+    3. Если передан чистый ID — ищет по ID.
+    """
+    # 1. Проверяем реплай (самый высокий приоритет)
+    if update.message and update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        if target_user.is_bot:
+            return None
+        return (target_user.id, target_user.username, target_user.full_name)
+
+    # 2. Если реплая нет, проверяем Entities (как Iris)
+    if update.message and update.message.entities:
+        for entity in update.message.entities:
+            # Если это текстовое упоминание (юзер без тега, но кликабельный)
+            if entity.type == "text_mention" and entity.user:
+                t_user = entity.user
+                if not t_user.is_bot:
+                    return (t_user.id, t_user.username, t_user.full_name)
+            
+            # Если это обычный @mention (@username)
+            if entity.type == "mention" and arg_text and arg_text.startswith("@"):
+                # Попробуем достать объект пользователя, если библиотека его привязала
+                if hasattr(entity, 'user') and entity.user:
+                    t_user = entity.user
+                    if not t_user.is_bot:
+                        return (t_user.id, t_user.username, t_user.full_name)
+
+    # 3. Фолбэк (запасной вариант), если передан аргумент
+    if not arg_text:
+        return None
+
+    arg_text = arg_text.strip()
+
+    # Если передан чистый числовой ID
+    if arg_text.isdigit():
+        target_id = int(arg_text)
+        try:
+            chat = await context.bot.get_chat(target_id)
+            first = chat.first_name or ""
+            last = chat.last_name or ""
+            full_name = f"{first} {last}".strip() or chat.title or "Пользователь"
+            return (chat.id, chat.username, full_name)
+        except Exception:
+            pass
+
+    # Если это @username, но Telegram не привязал entity (редкий случай), ищем локально в БД
+    if arg_text.startswith("@"):
+        username_to_search = arg_text[1:].lower()
+        target_id = db_get_user_id_by_username(username_to_search)
+        if target_id:
+            try:
+                import sqlite3
+                with db_connect() as conn:
+                    cur = conn.execute("SELECT username, full_name FROM users WHERE user_id = ? LIMIT 1", (target_id,))
+                    row = cur.fetchone()
+                    if row:
+                        return (target_id, row[0], row[1])
+            except Exception:
+                pass
+
+    return None
+
+def format_rank(rank, is_creator=False):
+    """Возвращает читаемое название ранга, например 'Заместитель (5)'"""
+    if is_creator:
+        return "Тех.Админ"
+    name = db_get_rank_name(rank)
+    return f"{name} ({rank})"
+
+def compute_level(total_score):
+    """Простая RPG-кривая уровней: на N-й уровень нужно 10*N^2 очков суммарно."""
+    total_score = max(total_score, 0)
+    level = int((total_score / 10) ** 0.5) + 1
+    current_threshold = 10 * (level - 1) ** 2
+    next_threshold = 10 * level ** 2
+    into_level = total_score - current_threshold
+    span = next_threshold - current_threshold
+    progress = into_level / span if span > 0 else 1.0
+    return level, into_level, span, progress
+
+def format_silent_ping(username):
+    return f'<a href="t.me/{username}">&#8288;</a>'
