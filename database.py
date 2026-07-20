@@ -328,3 +328,20 @@ def db_get_penalty(user_id: int) -> int:
         cur = conn.execute("SELECT total_amount FROM penalties WHERE user_id = ?", (user_id,))
         row = cur.fetchone()
         return row[0] if row else 0
+
+def db_adjust_penalty(user_id: int, delta: int):
+    """Изменяет сумму штрафов пользователя на delta (может быть отрицательным — например,
+    когда Глава выдаёт деньги и тем самым списывает часть штрафа). Не уходит ниже 0."""
+    with db_connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS penalties (
+                user_id INTEGER PRIMARY KEY,
+                total_amount INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            INSERT INTO penalties (user_id, total_amount)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET total_amount = MAX(0, total_amount + ?)
+        """, (user_id, max(0, delta), delta))
+        conn.commit()
