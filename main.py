@@ -1028,7 +1028,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
 # Укажи здесь unique_id твоего штрафного стикера
-PENALTY_STICKER_UNIQUE_ID = "AgAD..."  
+PENALTY_STICKER_UNIQUE_ID = "AgADpqEAAi642Uo"  
 
 async def handle_penalty_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
