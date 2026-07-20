@@ -4,7 +4,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 # Импортируем твои существующие библиотеки и хелперы
-import actions  # Твой модуль с ACTIONS и command_action
+import modulesfolder.actions as actions  # Твой модуль с ACTIONS и command_action
 from database import db_get_command_rank, resolve_target_user, format_rank
 
 
