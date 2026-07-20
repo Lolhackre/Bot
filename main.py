@@ -37,7 +37,7 @@ from database import (
     db_fix_default_rank_bug,
     db_set_nickname, db_get_nickname, db_set_status, db_get_status,
     db_set_birthday, db_get_birthday, db_get_profile_extra, db_get_todays_birthdays,
-    db_get_last_poll,db_add_penalty,db_get_penalty
+    db_get_last_poll,db_add_penalty,db_get_penalty,db_adjust_penalty
 )
 
 # Глобальное состояние для отмены опроса на текущий вечер
@@ -739,6 +739,53 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"❓ Вы уверены, что хотите полностью сбросить карму и статистику пользователя {display_name}?",
             parse_mode=ParseMode.HTML,
             reply_markup=reply_markup
+        )
+        return
+
+    # 6.1 Команда !выдать [сумма] [@username / ID] — выдать деньги (списывает часть штрафа получателя).
+    # Доступно ТОЛЬКО Главе (ранг 6). Важно: тех.админ (создатель бота), в отличие от других команд,
+    # здесь НЕ имеет обхода по рангу — выдавать деньги может исключительно Глава клана.
+    if text.startswith("!выдать"):
+        if user_id == 8049751536:
+            await update.message.reply_text("⛔ Тех.Админ не может пользоваться этой командой — выдавать деньги может только Глава.")
+            return
+
+        min_rank = db_get_command_rank("выдать_деньги")
+        if current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Эта команда доступна только с ранга {format_rank(min_rank)}.")
+            return
+
+        parts = raw_text.split()
+        rest_parts = parts[1:]
+
+        amount = None
+        if rest_parts and rest_parts[0].lstrip("-").isdigit():
+            amount = int(rest_parts[0])
+            rest_parts = rest_parts[1:]
+
+        if amount is None or amount <= 0:
+            await update.message.reply_text(
+                "✅ Использование: <code>!выдать [сумма] [@username / ID]</code> (или ответом на сообщение получателя).",
+                parse_mode=ParseMode.HTML
+            )
+            return
+
+        target_arg = None if update.message.reply_to_message else (rest_parts[0] if rest_parts else None)
+        resolved = await resolve_target_user(update, context, target_arg)
+        if resolved is None:
+            await update.message.reply_text("❌ Не удалось определить получателя. Укажите @username, ID или ответьте на его сообщение.")
+            return
+
+        target_id, target_username, target_full_name = resolved
+        display_name = format_user_link(target_id, target_username, target_full_name)
+
+        db_adjust_penalty(target_id, -amount)
+        remaining = db_get_penalty(target_id)
+
+        await update.message.reply_text(
+            f"💸 Глава выдал(а) <b>{amount:,}</b> получателю {display_name}!\n"
+            f"⚠️ Остаток штрафов: <b>{remaining:,}</b>".replace(",", " "),
+            parse_mode=ParseMode.HTML
         )
         return
 
