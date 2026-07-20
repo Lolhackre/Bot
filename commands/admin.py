@@ -131,10 +131,11 @@ async def handle_admin_commands(
                     pass
                 target_arg = parts[2]
 
-        if amount is None or amount <= 0:
+        if amount is None or amount == 0:
             await update.message.reply_text(
                 "⚠️ Используйте формат: <code>!выдать [сумма] @юзер</code> "
-                "или ответом на сообщение: <code>!выдать [сумма]</code>",
+                "или ответом на сообщение: <code>!выдать [сумма]</code>\n"
+                "Сумма может быть отрицательной — тогда штраф увеличится (уйдёт в минус/долг).",
                 parse_mode=ParseMode.HTML
             )
             return True
@@ -155,9 +156,14 @@ async def handle_admin_commands(
         else:
             balance_line = f"⚠️ Остаток штрафов: <b>{remaining:,}</b>".replace(",", " ")
 
+        action_line = (
+            f"💸 Пользователю {display_name} выдано <b>{amount:,}</b> — списано со штрафов.".replace(",", " ")
+            if amount > 0 else
+            f"📉 Пользователю {display_name} начислено дополнительно <b>{abs(amount):,}</b> к штрафу.".replace(",", " ")
+        )
+
         await update.message.reply_text(
-            f"💸 Пользователю {display_name} выдано <b>{amount:,}</b> — списано со штрафов.\n"
-            f"{balance_line}".replace(",", " "),
+            f"{action_line}\n{balance_line}",
             parse_mode=ParseMode.HTML
         )
         return True
