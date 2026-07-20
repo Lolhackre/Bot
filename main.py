@@ -37,7 +37,7 @@ from database import (
     db_fix_default_rank_bug,
     db_set_nickname, db_get_nickname, db_set_status, db_get_status,
     db_set_birthday, db_get_birthday, db_get_profile_extra, db_get_todays_birthdays,
-    db_get_last_poll
+    db_get_last_poll,db_add_penalty,db_get_penalty
 )
 
 # Глобальное состояние для отмены опроса на текущий вечер
@@ -388,10 +388,6 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     current_rank = db_get_user_rank(user_id)
     is_creator = (user_id == 8049751536)
 
-    try:
-        print(update.message.sticker.file_id)
-    except Exception as e:
-        print(f"Error occurred while printing sticker file unique ID: {e}")
 
     # 0a. Команда +ник [новый ник] — кастомный ник в статистике и действиях (пусто = сброс)
     if text.startswith("+ник"):
@@ -1031,6 +1027,47 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
     
+# Укажи здесь unique_id твоего штрафного стикера
+PENALTY_STICKER_UNIQUE_ID = "AgAD..."  
+
+async def handle_penalty_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    
+    print(update.message.sticker.file_unique_id)
+    # 1. Проверяем, что это именно ТОТ САМЫЙ стикер
+    if not message.sticker or message.sticker.file_unique_id != PENALTY_STICKER_UNIQUE_ID:
+        return
+
+    # 2. Проверяем права отправителя (например, только создатель или ранг 5+)
+    user_id = message.from_user.id
+    current_rank = db_get_user_rank(user_id) # Твоя функция рангов
+    is_creator = (user_id == config.CREATOR_ID)
+
+    if not is_creator and current_rank < 5:
+        return # Если выдавать штрафы может только высшая администрация
+
+    # 3. Проверяем, что стикер отправлен В ОТВЕТ на чьё-то сообщение
+    if not message.reply_to_message:
+        return
+
+    target_user = message.reply_to_message.from_user
+    
+    # Защита: нельзя выдавать штраф ботам
+    if target_user.is_bot:
+        return
+
+    # 4. Начисляем штраф в 500 единиц
+    db_add_penalty(target_user.id, 500)
+    total_penalty = db_get_penalty(target_user.id)
+
+    # 5. Выдаём красивый ответ в чат
+    target_link = message.reply_to_message.from_user.mention_html()
+    await message.reply_text(
+        f"🚨 <b>ВЫПИСАН ШТРАФ!</b>\n"
+        f"Участнику {target_link} начислен штраф в размере <b>500 грн/руб/очков</b>!\n"
+        f"⚠️ Общая сумма штрафов: <b>{total_penalty:,}</b>".replace(",", " "),
+        parse_mode=ParseMode.HTML
+    )
 # ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1096,7 +1133,7 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, targe
     is_creator = (target_id == 8049751536)
     nickname, status_text, birthday = db_get_profile_extra(target_id)
     display_name = format_user_link(target_id, un or target_username, fn or target_full_name)
-
+    user_penalty = db_get_penalty(target_id)
     text = (
         f"ℹ️ <b>Инфа:</b> {display_name}\n"
         f"Ранг доступа: {format_rank(rank, is_creator)}\n"
@@ -1109,6 +1146,7 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, targe
     text += (
         f"\n💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
         f"🚶 Карма за прогулки: {w_karma} очков (Прогулок: {walks})"
+        f"💸 <b>Штрафы:</b> {user_penalty:,} грн/очков\n"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
@@ -1685,12 +1723,18 @@ def main():
         group=2
     )
 
+    app.add_handler(
+        MessageHandler(filters.STICKER & filters.ChatType.GROUPS, handle_penalty_sticker),
+        group=0
+    )
+
     # Кнопки игры "Бункер" (bj/bs/bv) должны быть доступны ВСЕМ игрокам, а не только рангу 6+,
     # поэтому регистрируем их ПЕРЕД общим handle_callback_query (внутри группы срабатывает первый совпавший хэндлер)
     app.add_handler(CallbackQueryHandler(bunker_and_agent.handle_bunker_callback, pattern=r"^(bj|bs|bv|bc|ba|bu|bt|bf|bg):"))
     app.add_handler(CallbackQueryHandler(mafia.handle_mafia_callback, pattern=r"^(mj|ms|mr|mk|md|mc|mv):"))
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     app.add_handler(PollAnswerHandler(handle_poll_answer))
+
 
     jq = app.job_queue
     
