@@ -34,7 +34,7 @@ from database import (
     db_get_all_users, db_increment_inactivity,
     db_get_command_rank,
     db_get_todays_birthdays,
-    db_get_last_poll,db_add_penalty,db_get_penalty,db_get_user_last_vote, db_update_user_vote,
+    db_get_last_poll,db_add_penalty,db_get_penalty,db_get_balance_info,db_get_user_last_vote, db_update_user_vote,
     db_change_walk_karma,db_apply_walk_attendance,db_revert_walk_attendance,
     db_reset_user_stats, db_format_user_link,
     resolve_target_user,format_rank
@@ -528,16 +528,23 @@ async def handle_penalty_sticker(update: Update, context: ContextTypes.DEFAULT_T
     if target_user.is_bot:
         return
 
-    # 4. Начисляем штраф в 500 единиц
+    # 4. Начисляем штраф в 500 единиц (сначала съедает баланс, если он был, потом уходит в штраф)
     db_add_penalty(target_user.id, 500)
-    total_penalty = db_get_penalty(target_user.id)
+    total_penalty, total_balance = db_get_balance_info(target_user.id)
+
+    if total_penalty > 0:
+        balance_line = f"⚠️ Общая сумма штрафов: <b>{total_penalty:,}</b>".replace(",", " ")
+    elif total_balance > 0:
+        balance_line = f"💰 Штраф погашен балансом, остаток баланса: <b>{total_balance:,}</b>".replace(",", " ")
+    else:
+        balance_line = "✅ Штрафов и баланса нет (0)."
 
     # 5. Выдаём красивый ответ в чат
     target_link = message.reply_to_message.from_user.mention_html()
     await message.reply_text(
         f"🚨 <b>ВЫПИСАН ШТРАФ!</b>\n"
         f"Участнику {target_link} начислен штраф в размере <b>500 грн/руб/очков</b>!\n"
-        f"⚠️ Общая сумма штрафов: <b>{total_penalty:,}</b>".replace(",", " "),
+        f"{balance_line}",
         parse_mode=ParseMode.HTML
     )
 # ---------- Обработка нажатий на кнопки подтверждения обнуления ----------
