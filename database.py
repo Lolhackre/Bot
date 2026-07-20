@@ -537,7 +537,7 @@ def compute_level(total_score):
     return level, into_level, span, progress
 
 def format_silent_ping(username):
-    return f'<a href="t.me/{username}">&#8288;</a>'
+    return f'<a href="t.me/{username}">@{username}</a>'
 
 
 def db_adjust_penalty(user_id: int, delta: int):
