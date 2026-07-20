@@ -4,9 +4,9 @@ import json
 from datetime import time as dtime, datetime, timedelta
 from html import escape
 
-import modules.bunker as bunker
+import modulesfolder.bunker as bunker
 import extra_features
-import modules.mafia as mafia
+import modulesfolder.mafia as mafia
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
