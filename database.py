@@ -303,3 +303,28 @@ def db_get_last_poll():
             "SELECT poll_id, message_id FROM polls WHERE poll_type='place' ORDER BY rowid DESC LIMIT 1"
         )
         return cur.fetchone()
+
+def db_add_penalty(user_id: int, amount: int = 500):
+    """Увеличивает сумму штрафов пользователя на заданную величину."""
+    with db_connect() as conn:
+        # Создаем таблицу, если её еще нет
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS penalties (
+                user_id INTEGER PRIMARY KEY,
+                total_amount INTEGER DEFAULT 0
+            )
+        """)
+        # Вставляем запись или суммируем штраф, если юзер уже есть в базе
+        conn.execute("""
+            INSERT INTO penalties (user_id, total_amount) 
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET total_amount = total_amount + ?
+        """, (user_id, amount, amount))
+        conn.commit()
+
+def db_get_penalty(user_id: int) -> int:
+    """Возвращает текущую сумму штрафов пользователя."""
+    with db_connect() as conn:
+        cur = conn.execute("SELECT total_amount FROM penalties WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
+        return row[0] if row else 0

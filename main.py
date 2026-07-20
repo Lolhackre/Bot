@@ -388,6 +388,10 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     current_rank = db_get_user_rank(user_id)
     is_creator = (user_id == 8049751536)
 
+    try:
+        print(update.message.sticker.file_unique_id)
+    except Exception as e:
+        print(f"Error occurred while printing sticker file unique ID: {e}")
 
     # 0a. Команда +ник [новый ник] — кастомный ник в статистике и действиях (пусто = сброс)
     if text.startswith("+ник"):
