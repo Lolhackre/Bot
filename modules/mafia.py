@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 
 MAFIA_GAMES = {}
 STEP_SECONDS = 20
+ROLE_REMINDER_SECONDS = 20  # Сколько висит предупреждение "посмотри свою роль" перед первой ночью
 
 ROLE_NAMES = {
     "mafia": "🔪 Мафия",
@@ -63,14 +64,24 @@ def _alive_non_mafia(game):
 
 
 def _role_counts_for(count):
-    """Подбирает состав ролей в зависимости от числа игроков."""
+    """Подбирает состав ролей в зависимости от числа игроков (поддержка лобби до 20 человек)."""
     if count < 5:
         return {"mafia": 1, "doctor": 0, "detective": 0, "maniac": 0}
     if count < 7:
         return {"mafia": 1, "doctor": 1, "detective": 1, "maniac": 0}
     if count < 10:
         return {"mafia": 2, "doctor": 1, "detective": 1, "maniac": 0}
-    return {"mafia": 2, "doctor": 1, "detective": 1, "maniac": 1}
+    if count < 13:
+        return {"mafia": 2, "doctor": 1, "detective": 1, "maniac": 1}
+    if count < 16:
+        return {"mafia": 3, "doctor": 1, "detective": 1, "maniac": 1}
+    if count < 19:
+        return {"mafia": 3, "doctor": 1, "detective": 1, "maniac": 2}
+    # 19-20 игроков
+    return {"mafia": 4, "doctor": 1, "detective": 1, "maniac": 2}
+
+
+MAX_PLAYERS = 20
 
 
 def _assign_roles(game):
@@ -119,7 +130,7 @@ def _lobby_text(game):
     return (
         f"🔪 <b>ИГРА МАФИЯ</b>\n\n"
         f"Участники ({len(game['players'])}): {names}\n\n"
-        f"Нужно минимум 4 игрока. Нажмите кнопку, чтобы присоединиться.\n"
+        f"Нужно минимум 4 игрока (максимум {MAX_PLAYERS}). Нажмите кнопку, чтобы присоединиться.\n"
         f"Начать игру может только тот, кто её создал."
     )
 
@@ -239,6 +250,45 @@ def _step_prompt(chat_id, game, step):
         text = f"💊 <b>Ход доктора</b> ({STEP_SECONDS} сек). Доктор выбирает, кого спасти:"
         kb = _single_target_keyboard(chat_id, "md", targets, game)
     return text, kb
+
+
+async def _start_role_reminder(chat_id, context):
+    """Показывает предупреждение 'посмотри свою роль' (висит ROLE_REMINDER_SECONDS сек) — это ЕЩЁ НЕ ночь,
+    просто пауза перед стартом, чтобы все успели глянуть свою роль кнопкой «🎭 Моя роль»."""
+    game = MAFIA_GAMES[chat_id]
+    game["phase"] = "role_reminder"  # блокирует новые "mj" (присоединение) на время паузы
+
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            f"👀 <b>Успейте посмотреть свою роль!</b>\n"
+            f"У вас есть {ROLE_REMINDER_SECONDS} секунд — нажмите «🎭 Моя роль» под этим сообщением.\n"
+            f"Это ещё не ночь, просто время подготовиться."
+        ),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([_role_button_row(chat_id)])
+    )
+
+    job = context.job_queue.run_once(
+        _role_reminder_timeout_job,
+        when=ROLE_REMINDER_SECONDS,
+        data={"chat_id": chat_id, "message_id": msg.message_id}
+    )
+    game["step_timer_job"] = job
+
+
+async def _role_reminder_timeout_job(context: ContextTypes.DEFAULT_TYPE):
+    data = context.job.data
+    chat_id = data["chat_id"]
+    game = MAFIA_GAMES.get(chat_id)
+    if not game or game["phase"] != "role_reminder":
+        return
+    game["step_timer_job"] = None
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=data["message_id"])
+    except Exception:
+        pass
+    await _start_night(chat_id, context)
 
 
 async def _start_night(chat_id, context):
@@ -527,6 +577,9 @@ async def handle_mafia_callback(update: Update, context: ContextTypes.DEFAULT_TY
         if user.id in game["players"]:
             await query.answer("Ты уже в игре.")
             return
+        if len(game["players"]) >= MAX_PLAYERS:
+            await query.answer(f"⛔ Лобби заполнено (максимум {MAX_PLAYERS} игроков).", show_alert=True)
+            return
         game["players"][user.id] = {
             "name": user.full_name or user.username or str(user.id),
             "role": None,
@@ -575,7 +628,7 @@ async def handle_mafia_callback(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([_role_button_row(chat_id)])
         )
-        await _start_night(chat_id, context)
+        await _start_role_reminder(chat_id, context)
         return
 
     # ---- Ход мафии ----

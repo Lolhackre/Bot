@@ -538,3 +538,21 @@ def compute_level(total_score):
 
 def format_silent_ping(username):
     return f'<a href="t.me/{username}">&#8288;</a>'
+
+
+def db_adjust_penalty(user_id: int, delta: int):
+    """Изменяет сумму штрафов пользователя на delta (может быть отрицательным — например,
+    когда Глава выдаёт деньги и тем самым списывает часть штрафа). Не уходит ниже 0."""
+    with db_connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS penalties (
+                user_id INTEGER PRIMARY KEY,
+                total_amount INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            INSERT INTO penalties (user_id, total_amount)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET total_amount = MAX(0, total_amount + ?)
+        """, (user_id, max(0, delta), delta))
+        conn.commit()
