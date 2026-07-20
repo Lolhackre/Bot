@@ -384,6 +384,17 @@ def db_get_penalty(user_id: int) -> int:
         row = cur.fetchone()
         return row[0] if row else 0
     
+def db_get_balance_info(user_id: int):
+    """Возвращает пару (штраф, баланс). Хранится единое знаковое число:
+    положительное — штраф (должен), отрицательное — баланс (есть деньги на руках).
+    Одновременно ненулевым может быть только один из двух."""
+    total = db_get_penalty(user_id)
+    if total > 0:
+        return total, 0
+    elif total < 0:
+        return 0, -total
+    return 0, 0
+
 def db_get_user_last_vote(user_id, poll_id):
     with db_connect() as conn:
         cur = conn.execute("SELECT option_ids FROM user_current_votes WHERE user_id = ? AND poll_id = ?", (user_id, str(poll_id)))
