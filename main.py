@@ -1033,7 +1033,6 @@ PENALTY_STICKER_UNIQUE_ID = "AgADpqEAAi642Uo"
 async def handle_penalty_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     
-    print(update.message.sticker.file_unique_id)
     # 1. Проверяем, что это именно ТОТ САМЫЙ стикер
     if not message.sticker or message.sticker.file_unique_id != PENALTY_STICKER_UNIQUE_ID:
         return
