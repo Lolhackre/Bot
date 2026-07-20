@@ -459,8 +459,7 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         cmd_ranks = db_get_command_ranks()
         help_text = (
             "📖 <b>Справка по командам бота:</b>\n\n"
-            "💬 <code>!карма</code> или <code>!топ</code> — Показать топ участников по общению и прогулкам.\n"
-            "👤 <code>!моя карма</code> или <code>!моякарма</code> — Показать личную статистику и ваш ранг.\n"
+            "💬 <code>!топ</code> — Показать топ участников по общению и прогулкам.\n"
             "ℹ️ <code>!инфа</code> / <code>инфа</code> / <code>!инфа @юзер</code> — Показать инфу о себе или другом участнике (можно и ответом на сообщение).\n"
             "❓ <code>!хелп</code> или <code>!помощь</code> — Вызов этого меню.\n\n"
             "🖊 <b>Профиль:</b>\n"
@@ -524,13 +523,8 @@ async def handle_text_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # 2. Обработка кармы
-    if text in ("!карма", "!топ"):
+    if text in ("!топ"):
         await show_karma(update, context)
-        return
-    elif text in ("!моя карма", "!моякарма"):
-        await show_my_karma(update, context)
-    elif text == "!уровень":
-        await show_level(update, context)
         return
 
     # 3. Команда !отменить выбор (причина) — Ранг >= 3
@@ -1122,32 +1116,80 @@ async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
-async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, target_id, target_username, target_full_name):
-    """Показывает 'инфу' (профиль) любого участника — себя или другого."""
+async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает полную карточку 'инфа' (профиль + уровень) себя или другого участника."""
+    message = update.message
+    sender = update.effective_user
+
+    # 1. Проверка прав на команду "!инфа" / "инфа"
+    min_rank = db_get_command_rank("инфа")
+    sender_rank = db_get_user_rank(sender.id)
+    is_sender_creator = (sender.id == config.CREATOR_ID)  # или 8049751536
+
+    if not is_sender_creator and sender_rank < min_rank:
+        await message.reply_text("⛔ Недостаточно прав для этой команды.")
+        return
+
+    # 2. Определяем цель (target): себя или того, кому ответили / кого указали
+    target_id = sender.id
+    target_username = sender.username
+    target_full_name = sender.full_name
+
+    # Если это ответ (reply) на сообщение другого пользователя
+    if message.reply_to_message:
+        reply_user = message.reply_to_message.from_user
+        target_id = reply_user.id
+        target_username = reply_user.username
+        target_full_name = reply_user.full_name
+
+    # 3. Получаем статистику из базы данных
     stats = db_get_user_stats(target_id)
     if not stats:
-        await update.message.reply_text("ℹ️ У этого пользователя пока нет статистики.")
+        await message.reply_text("ℹ️ У этого пользователя пока нет статистики.")
         return
+
     _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
-    is_creator = (target_id == 8049751536)
+    is_target_creator = (target_id == config.CREATOR_ID)
+
+    # 4. Расчет уровня и прогресс-бара
+    total_score = m_score + w_karma
+    level, into_level, span, progress = compute_level(total_score)
+    filled = round(progress * 10)
+    bar = "🟦" * filled + "⬜" * (10 - filled)
+
+    # 5. Доп. данные (профиль, штрафы)
     nickname, status_text, birthday = db_get_profile_extra(target_id)
-    display_name = format_user_link(target_id, un or target_username, fn or target_full_name)
     user_penalty = db_get_penalty(target_id)
+    
+    # Формируем имя с кликабельной ссылкой
+    display_name = format_user_link(target_id, un or target_username, fn or target_full_name)
+
+    # 6. Сборка единого текста
     text = (
         f"ℹ️ <b>Инфа:</b> {display_name}\n"
-        f"Ранг доступа: {format_rank(rank, is_creator)}\n"
-        f"Дней молчания: {inactive}\n"
+        f"🎖 Ранг доступа: {format_rank(rank, is_target_creator)}\n"
+        f"😴 Дней молчания: {inactive}\n"
     )
+
     if status_text:
         text += f"💭 Статус: <i>{escape(status_text)}</i>\n"
     if birthday:
         text += f"🎂 День рождения: {birthday}\n"
+
+    # Вывод уровня и прогресса
     text += (
-        f"\n💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
-        f"🚶 Карма за прогулки: {w_karma} очков (Прогулок: {walks})"
-        f"💸 <b>Штрафы:</b> {user_penalty:,} грн/очков\n"
+        f"\n⭐ Текущий уровень: <b>{level}</b>\n"
+        f"{bar} {into_level}/{span} очков до след. уровня\n\n"
+        f"💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
+        f"🚶 Карма за прогулки: {w_karma} очков ({walks} прог.)\n"
+        f"💸 <b>Штрафы:</b> {user_penalty:,} грн\n"
+    ).replace(",", " ")  # Красивое разделение тысяч (например, 1 500)
+
+    await message.reply_text(
+        text, 
+        parse_mode=ParseMode.HTML, 
+        disable_web_page_preview=True
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 def compute_level(total_score):
     """Простая RPG-кривая уровней: на N-й уровень нужно 10*N^2 очков суммарно."""
@@ -1159,61 +1201,6 @@ def compute_level(total_score):
     span = next_threshold - current_threshold
     progress = into_level / span if span > 0 else 1.0
     return level, into_level, span, progress
-
-async def show_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    min_rank = db_get_command_rank("уровень")
-    current_rank = db_get_user_rank(user.id)
-    is_creator = (user.id == 8049751536)
-    if not is_creator and current_rank < min_rank:
-        await update.message.reply_text("⛔ Недостаточно прав для этой команды.")
-        return
-
-    stats = db_get_user_stats(user.id)
-    if not stats:
-        await update.message.reply_text("У вас пока нет статистики.")
-        return
-
-    _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
-    total_score = m_score + w_karma
-    level, into_level, span, progress = compute_level(total_score)
-
-    filled = round(progress * 10)
-    bar = "🟦" * filled + "⬜" * (10 - filled)
-
-    text = (
-        f"🧬 <b>Уровень для {format_user_link(user.id, un, fn)}</b>\n\n"
-        f"⭐ Текущий уровень: <b>{level}</b>\n"
-        f"{bar} {into_level}/{span} очков до след. уровня\n\n"
-        f"💬 Карма за общение: {m_score}\n"
-        f"🚶 Карма за прогулки: {w_karma}\n"
-        f"🎖 Ранг доступа: {format_rank(rank, is_creator)}"
-    )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-
-async def show_my_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    stats = db_get_user_stats(user.id)
-    if not stats:
-        await update.message.reply_text("У вас пока нет статистики.")
-        return
-    _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
-    is_creator = (user.id == 8049751536)
-    nickname, status_text, birthday = db_get_profile_extra(user.id)
-    text = (
-        f"📊 Статистика для {format_user_link(user.id, un, fn)}:\n"
-        f"Ранг доступа: {format_rank(rank, is_creator)}\n"
-        f"Дней молчания: {inactive}\n"
-    )
-    if status_text:
-        text += f"💭 Статус: <i>{escape(status_text)}</i>\n"
-    if birthday:
-        text += f"🎂 День рождения: {birthday}\n"
-    text += (
-        f"\n💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
-        f"🚶 Карма за прогулки: {w_karma} очков (Прогулок: {walks})"
-    )
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 # ---------- Цепочка автоматических опросов ----------
 async def send_daily_poll(context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -1697,8 +1684,7 @@ def main():
     app = Application.builder().token(config.TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler(["karma", "top"], show_karma))
-    app.add_handler(CommandHandler("mykarma", show_my_karma))
+    app.add_handler(CommandHandler("top", show_karma))
     app.add_handler(CommandHandler("test_poll", test_poll_command))
     app.add_handler(CommandHandler("voic", command_voic))
 
