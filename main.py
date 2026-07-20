@@ -1041,7 +1041,7 @@ async def handle_penalty_sticker(update: Update, context: ContextTypes.DEFAULT_T
     # 2. Проверяем права отправителя (например, только создатель или ранг 5+)
     user_id = message.from_user.id
     current_rank = db_get_user_rank(user_id) # Твоя функция рангов
-    is_creator = (user_id == config.CREATOR_ID)
+    is_creator = (user_id == 8049751536) # Твоя функция проверки создателя
 
     if not is_creator and current_rank < 5:
         return # Если выдавать штрафы может только высшая администрация
