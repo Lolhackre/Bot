@@ -106,18 +106,12 @@ async def handle_admin_commands(
         )
         return True
 
-    # !выдать [сумма] @юз — выдать деньги (списывает со штрафов, может уйти в минус/долг)
-    # Строго ранг 6 (Глава). Без обхода по ID тех.админа/создателя — is_creator тут намеренно не проверяется.
-    if text.startswith("!выдать"):
-        if current_rank < 6:
-            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
-            return True
-
-        parts = raw_text.split()
+    # ---------- Общая помощь для !выдать / !штраф ----------
+    def _parse_amount_and_target(raw_text, message, parts):
+        """Разбирает '[команда] [сумма] [@юз]' либо '[команда] [сумма]' ответом на сообщение."""
         amount = None
         target_arg = None
-
-        if update.message.reply_to_message:
+        if message.reply_to_message:
             if len(parts) >= 2:
                 try:
                     amount = int(parts[1])
@@ -130,13 +124,31 @@ async def handle_admin_commands(
                 except ValueError:
                     pass
                 target_arg = parts[2]
+        return amount, target_arg
+
+    def _format_balance_line(remaining):
+        if remaining > 0:
+            return f"⚠️ Штраф: <b>{remaining:,}</b>".replace(",", " ")
+        elif remaining < 0:
+            return f"💰 Баланс: <b>{-remaining:,}</b>".replace(",", " ")
+        return "✅ Штрафов и баланса нет (0)."
+
+    # !выдать [сумма] @юз — выдаёт деньги. Сначала гасит штраф, остаток уходит в баланс (без ограничений).
+    # Строго ранг 6 (Глава). Без обхода по ID тех.админа/создателя — is_creator тут намеренно не проверяется.
+    if text.startswith("!выдать"):
+        if current_rank < 6:
+            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+            return True
+
+        parts = raw_text.split()
+        amount, target_arg = _parse_amount_and_target(raw_text, update.message, parts)
 
         if amount is None or amount <= 0:
             await update.message.reply_text(
                 "⚠️ Используйте формат: <code>!выдать [сумма] @юзер</code> "
                 "или ответом на сообщение: <code>!выдать [сумма]</code>\n"
-                "Сумма — положительное число. Штраф отнимается от неё, и если сумма больше "
-                "текущего штрафа (или штрафа нет вовсе) — баланс уйдёт в минус (долг), без ограничений.",
+                "Сумма — положительное число. Сначала гасит штраф, остаток уходит в баланс "
+                "(без ограничений сверху).",
                 parse_mode=ParseMode.HTML
             )
             return True
@@ -152,16 +164,49 @@ async def handle_admin_commands(
         db_adjust_penalty_unbounded(target_id, -amount)
         remaining = db_get_penalty(target_id)
 
-        if remaining < 0:
-            balance_line = f"💰 Баланс ушёл в минус (долг): <b>{remaining:,}</b>".replace(",", " ")
-        else:
-            balance_line = f"⚠️ Остаток штрафов: <b>{remaining:,}</b>".replace(",", " ")
-
         await update.message.reply_text(
-            f"💸 Пользователю {display_name} выдано <b>{amount:,}</b> — списано со штрафов.\n{balance_line}".replace(",", " "),
+            f"💸 Пользователю {display_name} выдано <b>{amount:,}</b>.\n{_format_balance_line(remaining)}".replace(",", " "),
             parse_mode=ParseMode.HTML
         )
         return True
+
+    # !штраф [сумма] @юз — отнимает деньги. Сначала гасит баланс, остаток уходит в штраф (без ограничений).
+    # Строго ранг 6 (Глава). Без обхода по ID тех.админа/создателя.
+    if text.startswith("!штраф"):
+        if current_rank < 6:
+            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
+            return True
+
+        parts = raw_text.split()
+        amount, target_arg = _parse_amount_and_target(raw_text, update.message, parts)
+
+        if amount is None or amount <= 0:
+            await update.message.reply_text(
+                "⚠️ Используйте формат: <code>!штраф [сумма] @юзер</code> "
+                "или ответом на сообщение: <code>!штраф [сумма]</code>\n"
+                "Сумма — положительное число. Сначала гасит баланс, остаток уходит в штраф "
+                "(без ограничений сверху).",
+                parse_mode=ParseMode.HTML
+            )
+            return True
+
+        resolved = await resolve_target_user(update, context, target_arg)
+        if resolved is None:
+            await update.message.reply_text("❌ Не удалось найти пользователя. Укажите @username, ID или ответьте на его сообщение.")
+            return True
+
+        target_id, target_username, target_full_name = resolved
+        display_name = db_format_user_link(target_id, target_username, target_full_name)
+
+        db_adjust_penalty_unbounded(target_id, amount)
+        remaining = db_get_penalty(target_id)
+
+        await update.message.reply_text(
+            f"🚨 Пользователю {display_name} начислен штраф <b>{amount:,}</b>.\n{_format_balance_line(remaining)}".replace(",", " "),
+            parse_mode=ParseMode.HTML
+        )
+        return True
+
 
     # !обнулить
     if text.startswith("!обнулить"):
