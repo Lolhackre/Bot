@@ -9,7 +9,7 @@ from database import (
     format_rank,db_get_command_rank,db_fix_default_rank_bug,
     db_get_rank_name,db_get_rank_names,resolve_target_user,
     db_format_user_link,db_set_user_rank,db_set_rank_name,db_get_command_ranks,
-    db_set_command_rank,db_adjust_penalty,db_get_penalty
+    db_set_command_rank,db_adjust_penalty,db_adjust_penalty_unbounded,db_get_penalty
     )
 
 async def handle_admin_commands(
@@ -106,11 +106,11 @@ async def handle_admin_commands(
         )
         return True
 
-    # !выдать [сумма] @юз — выдать деньги (списывает со штрафов)
+    # !выдать [сумма] @юз — выдать деньги (списывает со штрафов, может уйти в минус/долг)
+    # Строго ранг 6 (Глава). Без обхода по ID тех.админа/создателя — is_creator тут намеренно не проверяется.
     if text.startswith("!выдать"):
-        min_rank = db_get_command_rank("выдать_деньги")
-        if not is_creator and current_rank < min_rank:
-            await update.message.reply_text(f"⛔ Эта команда доступна только с ранга {format_rank(min_rank)}.")
+        if current_rank < 6:
+            await update.message.reply_text(f"⛔ Эта команда доступна только {format_rank(6)}.")
             return True
 
         parts = raw_text.split()
@@ -147,12 +147,17 @@ async def handle_admin_commands(
         target_id, target_username, target_full_name = resolved
         display_name = db_format_user_link(target_id, target_username, target_full_name)
 
-        db_adjust_penalty(target_id, -amount)
+        db_adjust_penalty_unbounded(target_id, -amount)
         remaining = db_get_penalty(target_id)
+
+        if remaining < 0:
+            balance_line = f"💰 Баланс ушёл в минус (долг): <b>{remaining:,}</b>".replace(",", " ")
+        else:
+            balance_line = f"⚠️ Остаток штрафов: <b>{remaining:,}</b>".replace(",", " ")
 
         await update.message.reply_text(
             f"💸 Пользователю {display_name} выдано <b>{amount:,}</b> — списано со штрафов.\n"
-            f"⚠️ Остаток штрафов: <b>{remaining:,}</b>".replace(",", " "),
+            f"{balance_line}".replace(",", " "),
             parse_mode=ParseMode.HTML
         )
         return True
