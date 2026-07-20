@@ -19,6 +19,7 @@ ROLE_REMINDER_SECONDS = 20  # Сколько висит предупрежден
 ROLE_NAMES = {
     "mafia": "🔪 Мафия",
     "don": "🎩 Дон",
+    "vampire": "🧛 Кровопийца",
     "doctor": "💊 Доктор",
     "detective": "🕵️ Комиссар",
     "sergeant": "👮 Сержант",
@@ -37,6 +38,7 @@ ROLE_NAMES = {
 ROLE_DESCRIPTIONS = {
     "mafia": "Каждую ночь вместе с остальной мафией (и Доном) выбираешь, кого убрать. Днём притворяйся мирным.",
     "don": "Глава мафии. Голосуешь вместе с мафией за жертву, а также раз в ночь можешь проверить любого игрока и узнать, не комиссар ли он. При проверке комиссаром ты выглядишь как мирный житель.",
+    "vampire": "Член мафии. Голосуешь вместе с остальной мафией за общую жертву. Дополнительно один раз за игру можешь тайно «напиться крови» другого игрока на отдельном ходу — если доктор его не спасёт, он погибнет этой же ночью независимо от общего выбора мафии. При проверке комиссаром ты выглядишь как обычная мафия.",
     "doctor": "Каждую ночь можешь спасти одного игрока (в т.ч. себя) от гибели.",
     "detective": "Каждую ночь можешь проверить одного игрока и узнать его принадлежность.",
     "sergeant": "Каждую ночь надеваешь наручники на одного игрока — на следующий день он не сможет голосовать.",
@@ -56,6 +58,7 @@ ROLE_DESCRIPTIONS = {
 DETECTIVE_RESULT = {
     "mafia": "🔪 Мафия!",
     "don": "👤 Мирный житель.",  # Дон невидим для комиссара
+    "vampire": "🔪 Мафия!",
     "maniac": "🗡 Маньяк-одиночка!",
     "doctor": "👤 Мирный житель.",
     "detective": "👤 Мирный житель.",
@@ -86,24 +89,24 @@ def _alive_with_role(game, role):
 
 
 def _alive_mafia(game):
-    """Мафия + Дон — общая команда для ночного убийства и подсчёта победы."""
-    return _alive_with_role(game, "mafia") + _alive_with_role(game, "don")
+    """Мафия + Дон + Кровопийца — общая команда для ночного убийства и подсчёта победы."""
+    return _alive_with_role(game, "mafia") + _alive_with_role(game, "don") + _alive_with_role(game, "vampire")
 
 
 def _effective_mafia_voters(game):
-    """Живые мафиози/Дон, которые не отвлечены путаной этой ночью."""
+    """Живые мафиози/Дон/Кровопийца, которые не отвлечены путаной этой ночью."""
     return [uid for uid in _alive_mafia(game) if uid != game.get("put_target")]
 
 
 def _alive_non_mafia(game):
-    return [uid for uid in _alive_ids(game) if game["players"][uid]["role"] not in ("mafia", "don")]
+    return [uid for uid in _alive_ids(game) if game["players"][uid]["role"] not in ("mafia", "don", "vampire")]
 
 
 def _role_counts_for(count):
     """Подбирает состав ролей в зависимости от числа игроков (поддержка лобби до 20 человек)."""
     base = {"mafia": 1, "don": 0, "doctor": 0, "detective": 0, "sergeant": 0,
             "maniac": 0, "jester": 0, "vigilante": 0, "put": 0, "lawyer": 0, "witch": 0,
-            "provocateur": 0, "werewolf": 0, "informant": 0}
+            "provocateur": 0, "werewolf": 0, "informant": 0, "vampire": 0}
     if count < 5:
         return base
     if count < 7:
@@ -121,16 +124,16 @@ def _role_counts_for(count):
     if count < 19:
         return {**base, "mafia": 3, "don": 1, "doctor": 1, "detective": 1, "maniac": 2,
                 "jester": 1, "vigilante": 1, "put": 1, "sergeant": 1, "lawyer": 1,
-                "informant": 1, "provocateur": 1}
+                "informant": 1, "provocateur": 1, "vampire": 1}
     # 19-20 игроков
     return {**base, "mafia": 3, "don": 1, "doctor": 1, "detective": 1, "maniac": 2,
             "jester": 1, "vigilante": 1, "put": 1, "sergeant": 1, "lawyer": 1, "witch": 1,
-            "informant": 1, "provocateur": 1, "werewolf": 1}
+            "informant": 1, "provocateur": 1, "werewolf": 1, "vampire": 1}
 
 
 MAX_PLAYERS = 20
 
-ROLE_ASSIGN_ORDER = ("mafia", "don", "doctor", "detective", "sergeant",
+ROLE_ASSIGN_ORDER = ("mafia", "don", "vampire", "doctor", "detective", "sergeant",
                      "maniac", "werewolf", "jester", "vigilante", "put", "lawyer", "witch",
                      "informant", "provocateur")
 
@@ -161,9 +164,9 @@ def _with_role_button(chat_id, rows):
 def _role_alert_text(game, uid):
     role = game["players"][uid]["role"]
     lines = [ROLE_NAMES[role], ROLE_DESCRIPTIONS[role]]
-    if role in ("mafia", "don"):
+    if role in ("mafia", "don", "vampire"):
         teammates = [game["players"][m]["name"] for m in game["order"]
-                     if game["players"][m]["role"] in ("mafia", "don") and m != uid]
+                     if game["players"][m]["role"] in ("mafia", "don", "vampire") and m != uid]
         if teammates:
             lines.append("Твои сообщники: " + ", ".join(teammates))
         else:
@@ -220,6 +223,7 @@ async def command_mafia_start(update: Update, context: ContextTypes.DEFAULT_TYPE
         "mafia_votes": {},
         "maniac_target": None,
         "werewolf_target": None,
+        "vampire_target": None,
         "vigilante_target": None,
         "doctor_target": None,
         "put_target": None,
@@ -260,6 +264,8 @@ def _active_night_steps(game):
         steps.append("mafia")
     if _alive_with_role(game, "don"):
         steps.append("don_check")
+    if any(not game["players"][uid]["ability_used"] for uid in _alive_with_role(game, "vampire")):
+        steps.append("vampire")
     if _alive_with_role(game, "maniac"):
         steps.append("maniac")
     if _alive_with_role(game, "werewolf"):
@@ -292,6 +298,8 @@ def _step_role_holders(game, step):
         return _alive_mafia(game)
     if step == "don_check":
         return _alive_with_role(game, "don")
+    if step == "vampire":
+        return [uid for uid in _alive_with_role(game, "vampire") if not game["players"][uid]["ability_used"]]
     if step == "maniac":
         return _alive_with_role(game, "maniac")
     if step == "werewolf":
@@ -364,6 +372,14 @@ def _step_prompt(chat_id, game, step):
         targets = [uid for uid in _alive_ids(game) if uid != don_id]
         text = f"🎩 <b>Ход Дона</b> ({STEP_SECONDS} сек). Дон проверяет, не комиссар ли игрок:"
         kb = _single_target_keyboard(chat_id, "mo", targets, game)
+    elif step == "vampire":
+        vamp_id = next(uid for uid in _alive_with_role(game, "vampire") if not game["players"][uid]["ability_used"])
+        targets = [uid for uid in _alive_ids(game) if uid != vamp_id]
+        text = (
+            f"🧛 <b>Ход Кровопийцы</b> ({STEP_SECONDS} сек). Разовая тайная жертва — можешь напиться крови "
+            f"или пропустить (способность потратится только при использовании):"
+        )
+        kb = _single_target_keyboard(chat_id, "mbl", targets, game, skip=True)
     elif step == "maniac":
         maniac_id = _alive_with_role(game, "maniac")[0]
         targets = [uid for uid in _alive_ids(game) if uid != maniac_id]
@@ -476,6 +492,7 @@ async def _start_night(chat_id, context):
     game["mafia_votes"] = {}
     game["maniac_target"] = None
     game["werewolf_target"] = None
+    game["vampire_target"] = None
     game["vigilante_target"] = None
     game["doctor_target"] = None
     game["put_target"] = None
@@ -571,6 +588,7 @@ async def _resolve_night(chat_id, context):
 
     maniac_target = game.get("maniac_target")
     werewolf_target = game.get("werewolf_target")
+    vampire_target = game.get("vampire_target")
     vigilante_target = game.get("vigilante_target")
     doctor_target = game.get("doctor_target")
 
@@ -581,6 +599,8 @@ async def _resolve_night(chat_id, context):
         deaths.add(maniac_target)
     if werewolf_target is not None and werewolf_target != doctor_target:
         deaths.add(werewolf_target)
+    if vampire_target is not None and vampire_target != doctor_target:
+        deaths.add(vampire_target)
     if vigilante_target is not None and vigilante_target != doctor_target:
         deaths.add(vigilante_target)
 
@@ -711,10 +731,11 @@ async def _tally_day_votes(chat_id, context):
 
 def _check_win(game):
     alive = _alive_ids(game)
-    mafia_alive = [uid for uid in alive if game["players"][uid]["role"] in ("mafia", "don")]
+    mafia_alive = [uid for uid in alive if game["players"][uid]["role"] in ("mafia", "don", "vampire")]
     # Маньяк и Оборотень — оба одиночки-убийцы вне сговора с мафией и городом.
     solo_alive = [uid for uid in alive if game["players"][uid]["role"] in ("maniac", "werewolf")]
-    town_alive = [uid for uid in alive if game["players"][uid]["role"] not in ("mafia", "don", "maniac", "werewolf")]
+    town_alive = [uid for uid in alive
+                  if game["players"][uid]["role"] not in ("mafia", "don", "vampire", "maniac", "werewolf")]
 
     if len(alive) <= 1 and solo_alive:
         return "solo"
@@ -842,6 +863,8 @@ async def handle_mafia_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
         if counts["don"]:
             role_summary += f", 🎩 Дон ×{counts['don']}"
+        if counts["vampire"]:
+            role_summary += f", 🧛 Кровопийца ×{counts['vampire']}"
         if counts["maniac"]:
             role_summary += f", 🗡 Маньяк ×{counts['maniac']}"
         if counts["vigilante"]:
@@ -883,7 +906,7 @@ async def handle_mafia_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer("Сейчас не ход мафии.", show_alert=True)
             return
         if user.id not in game["players"] or not game["players"][user.id]["alive"] or \
-                game["players"][user.id]["role"] not in ("mafia", "don"):
+                game["players"][user.id]["role"] not in ("mafia", "don", "vampire"):
             await query.answer("Выбирать жертву может только живой участник мафии.", show_alert=True)
             return
         if user.id == game.get("put_target"):
@@ -899,7 +922,7 @@ async def handle_mafia_callback(update: Update, context: ContextTypes.DEFAULT_TY
         except ValueError:
             return
         if target_id not in game["players"] or not game["players"][target_id]["alive"] or \
-                game["players"][target_id]["role"] in ("mafia", "don"):
+                game["players"][target_id]["role"] in ("mafia", "don", "vampire"):
             await query.answer("Недопустимая цель.", show_alert=True)
             return
         game["mafia_votes"][user.id] = target_id
@@ -965,6 +988,39 @@ async def handle_mafia_callback(update: Update, context: ContextTypes.DEFAULT_TY
         result = "🕵️ Это комиссар!" if is_detective else "👤 Не комиссар."
         game["night_actors"].add(user.id)
         await query.answer(text=f"{target_name}: {result}", show_alert=True)
+        await _advance_night_step(chat_id, context)
+        return
+
+    # ---- Ход Кровопийцы (разовый тайный укус) ----
+    if action == "mbl":
+        if game["phase"] != "night" or game.get("current_step") != "vampire":
+            await query.answer("Сейчас не ход Кровопийцы.", show_alert=True)
+            return
+        if user.id not in game["players"] or not game["players"][user.id]["alive"] or \
+                game["players"][user.id]["role"] != "vampire":
+            await query.answer("Пить кровь может только живой Кровопийца.", show_alert=True)
+            return
+        if game["players"][user.id]["ability_used"]:
+            await query.answer("Ты уже использовал(а) свою единственную способность.", show_alert=True)
+            return
+        if len(parts) < 3:
+            return
+        target_raw = parts[2]
+        if target_raw == "skip":
+            await query.answer("Пропустил(а) — способность сохранена на будущее.")
+            await _advance_night_step(chat_id, context)
+            return
+        try:
+            target_id = int(target_raw)
+        except ValueError:
+            return
+        if target_id not in game["players"] or not game["players"][target_id]["alive"] or target_id == user.id:
+            await query.answer("Недопустимая цель.", show_alert=True)
+            return
+        game["vampire_target"] = target_id
+        game["players"][user.id]["ability_used"] = True
+        game["night_actors"].add(user.id)
+        await query.answer(f"Ты напился(-лась) крови: {game['players'][target_id]['name']}")
         await _advance_night_step(chat_id, context)
         return
 
