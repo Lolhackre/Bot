@@ -9,7 +9,7 @@ from database import (
     format_rank,db_get_command_rank,db_fix_default_rank_bug,
     db_get_rank_name,db_get_rank_names,resolve_target_user,
     db_format_user_link,db_set_user_rank,db_set_rank_name,db_get_command_ranks,
-    db_set_command_rank
+    db_set_command_rank,db_adjust_penalty,db_get_penalty
     )
 
 async def handle_admin_commands(
@@ -102,6 +102,57 @@ async def handle_admin_commands(
         db_set_command_rank(cmd_key, rank_val)
         await update.message.reply_text(
             f"✅ Теперь «{config.COMMAND_LABELS[cmd_key]}» доступна с ранга {format_rank(rank_val)} и выше.",
+            parse_mode=ParseMode.HTML
+        )
+        return True
+
+    # !выдать [сумма] @юз — выдать деньги (списывает со штрафов)
+    if text.startswith("!выдать"):
+        min_rank = db_get_command_rank("выдать_деньги")
+        if not is_creator and current_rank < min_rank:
+            await update.message.reply_text(f"⛔ Эта команда доступна только с ранга {format_rank(min_rank)}.")
+            return True
+
+        parts = raw_text.split()
+        amount = None
+        target_arg = None
+
+        if update.message.reply_to_message:
+            if len(parts) >= 2:
+                try:
+                    amount = int(parts[1])
+                except ValueError:
+                    pass
+        else:
+            if len(parts) >= 3:
+                try:
+                    amount = int(parts[1])
+                except ValueError:
+                    pass
+                target_arg = parts[2]
+
+        if amount is None or amount <= 0:
+            await update.message.reply_text(
+                "⚠️ Используйте формат: <code>!выдать [сумма] @юзер</code> "
+                "или ответом на сообщение: <code>!выдать [сумма]</code>",
+                parse_mode=ParseMode.HTML
+            )
+            return True
+
+        resolved = await resolve_target_user(update, context, target_arg)
+        if resolved is None:
+            await update.message.reply_text("❌ Не удалось найти пользователя. Укажите @username, ID или ответьте на его сообщение.")
+            return True
+
+        target_id, target_username, target_full_name = resolved
+        display_name = db_format_user_link(target_id, target_username, target_full_name)
+
+        db_adjust_penalty(target_id, -amount)
+        remaining = db_get_penalty(target_id)
+
+        await update.message.reply_text(
+            f"💸 Пользователю {display_name} выдано <b>{amount:,}</b> — списано со штрафов.\n"
+            f"⚠️ Остаток штрафов: <b>{remaining:,}</b>".replace(",", " "),
             parse_mode=ParseMode.HTML
         )
         return True
