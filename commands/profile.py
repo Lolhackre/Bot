@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 import config
 from telegram.constants import ParseMode
 from datetime import time as dtime, datetime, timedelta
-from database import db_get_command_rank,format_rank,db_get_user_rank,db_set_nickname, db_set_status, db_set_birthday, resolve_target_user,db_module_enabled_get, db_get_user_stats, db_get_profile_extra, db_get_penalty, db_format_user_link, compute_level
+from database import db_get_command_rank,format_rank,db_get_user_rank,db_set_nickname, db_set_status, db_set_birthday, resolve_target_user,db_module_enabled_get, db_get_user_stats, db_get_profile_extra, db_get_penalty, db_get_balance_info, db_format_user_link, compute_level
 # Импортируй тут нужные функции базы данных и форматирования
 
 async def show_profile(
@@ -55,9 +55,9 @@ async def show_profile(
     filled = round(progress * 10)
     bar = "🟦" * filled + "⬜" * (10 - filled)
 
-    # 5. Доп. данные (профиль, штрафы)
+    # 5. Доп. данные (профиль, штрафы/баланс)
     nickname, status_text, birthday = db_get_profile_extra(target_id)
-    user_penalty = db_get_penalty(target_id)
+    user_penalty, user_balance = db_get_balance_info(target_id)
     
     display_name = db_format_user_link(target_id, un or target_username, fn or target_full_name)
 
@@ -73,12 +73,18 @@ async def show_profile(
     if birthday:
         text += f"🎂 День рождения: {birthday}\n"
 
+    money_line = ""
+    if user_penalty > 0:
+        money_line = f"💸 <b>Штраф:</b> {user_penalty:,} грн\n"
+    elif user_balance > 0:
+        money_line = f"💰 <b>Баланс:</b> {user_balance:,} грн\n"
+
     text += (
         f"\n⭐ Текущий уровень: <b>{level}</b>\n"
         f"{bar} {into_level}/{span} очков до след. уровня\n\n"
         f"💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
         f"🚶 Карма за прогулки: {w_karma} очков ({walks} прог.)\n"
-        f"💸 <b>Штрафы:</b> {user_penalty:,} грн\n"
+        f"{money_line}"
     ).replace(",", " ")
 
     await message.reply_text(
