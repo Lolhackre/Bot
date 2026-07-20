@@ -1036,7 +1036,7 @@ async def handle_penalty_sticker(update: Update, context: ContextTypes.DEFAULT_T
     current_rank = db_get_user_rank(user_id) # Твоя функция рангов
     is_creator = (user_id == 8049751536) # Твоя функция проверки создателя
 
-    if not is_creator and current_rank < 5:
+    if not is_creator and current_rank < 3:
         return # Если выдавать штрафы может только высшая администрация
 
     # 3. Проверяем, что стикер отправлен В ОТВЕТ на чьё-то сообщение
@@ -1116,31 +1116,37 @@ async def show_karma(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
-async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_profile(
+    update: Update, 
+    context: ContextTypes.DEFAULT_TYPE, 
+    target_id=None, 
+    target_username=None, 
+    target_full_name=None
+):
     """Показывает полную карточку 'инфа' (профиль + уровень) себя или другого участника."""
     message = update.message
     sender = update.effective_user
 
-    # 1. Проверка прав на команду "!инфа" / "инфа"
+    # 1. Проверка прав на команду
     min_rank = db_get_command_rank("инфа")
     sender_rank = db_get_user_rank(sender.id)
-    is_sender_creator = (sender.id == config.CREATOR_ID)  # или 8049751536
+    is_sender_creator = (sender.id == 8049751536)
 
     if not is_sender_creator and sender_rank < min_rank:
         await message.reply_text("⛔ Недостаточно прав для этой команды.")
         return
 
-    # 2. Определяем цель (target): себя или того, кому ответили / кого указали
-    target_id = sender.id
-    target_username = sender.username
-    target_full_name = sender.full_name
-
-    # Если это ответ (reply) на сообщение другого пользователя
-    if message.reply_to_message:
-        reply_user = message.reply_to_message.from_user
-        target_id = reply_user.id
-        target_username = reply_user.username
-        target_full_name = reply_user.full_name
+    # 2. Если target_id не передан из внешнего хэндлера — определяем сами
+    if target_id is None:
+        if message.reply_to_message:
+            reply_user = message.reply_to_message.from_user
+            target_id = reply_user.id
+            target_username = reply_user.username
+            target_full_name = reply_user.full_name
+        else:
+            target_id = sender.id
+            target_username = sender.username
+            target_full_name = sender.full_name
 
     # 3. Получаем статистику из базы данных
     stats = db_get_user_stats(target_id)
@@ -1149,7 +1155,7 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     _, un, fn, msgs, m_score, walks, w_karma, rank, inactive = stats
-    is_target_creator = (target_id == config.CREATOR_ID)
+    is_target_creator = (target_id == 8049751536)
 
     # 4. Расчет уровня и прогресс-бара
     total_score = m_score + w_karma
@@ -1161,7 +1167,6 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nickname, status_text, birthday = db_get_profile_extra(target_id)
     user_penalty = db_get_penalty(target_id)
     
-    # Формируем имя с кликабельной ссылкой
     display_name = format_user_link(target_id, un or target_username, fn or target_full_name)
 
     # 6. Сборка единого текста
@@ -1176,14 +1181,13 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if birthday:
         text += f"🎂 День рождения: {birthday}\n"
 
-    # Вывод уровня и прогресса
     text += (
         f"\n⭐ Текущий уровень: <b>{level}</b>\n"
         f"{bar} {into_level}/{span} очков до след. уровня\n\n"
         f"💬 Карма за общение: {m_score} очков ({msgs} сообщ.)\n"
         f"🚶 Карма за прогулки: {w_karma} очков ({walks} прог.)\n"
         f"💸 <b>Штрафы:</b> {user_penalty:,} грн\n"
-    ).replace(",", " ")  # Красивое разделение тысяч (например, 1 500)
+    ).replace(",", " ")
 
     await message.reply_text(
         text, 
